@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistical Tests — Signal Noir</title>
+    <link rel="stylesheet" href="../../tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <script src="../shared/theme.js"></script>
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <link rel="stylesheet" href="../shared/design-system.css">
+    <link rel="stylesheet" href="../shared/platform.css">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Statistical Tests</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Significance testing</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-6">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            Answers the question people actually mean when they squint at a chart: is this difference
+            real, or is it noise? Load a file, pick a test, and get the statistic, the p value, an
+            effect size, and a sentence saying what it means in plain words.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Upload File</label>
+            <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.json" class="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
+            <p id="file-status" class="text-xs text-slate-500 mt-2">No file loaded.</p>
+        </div>
+
+        <div id="workspace" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl p-5">
+                <h2 class="text-sm font-medium text-slate-700 mb-3">1. Choose a test</h2>
+                <div id="test-picker" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                <p id="test-blurb" class="text-xs text-slate-500 mt-4 leading-relaxed"></p>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-5">
+                <h2 class="text-sm font-medium text-slate-700 mb-3">2. Choose the columns</h2>
+                <div id="field-picker" class="flex flex-wrap gap-3 items-end"></div>
+                <div class="mt-4 flex items-center gap-3">
+                    <button onclick="runTest()" class="bg-[#0062F1] hover:bg-[#00133C] text-white text-sm font-semibold px-5 py-2 rounded-lg">Run the test</button>
+                    <label id="pooled-wrap" class="hidden items-center gap-2 text-xs text-slate-600">
+                        <input type="checkbox" id="opt-pooled" class="rounded border-slate-300">
+                        Assume both groups have equal spread
+                    </label>
+                </div>
+            </div>
+
+            <div id="result" class="hidden bg-white border border-slate-200 rounded-xl p-5"></div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script src="../shared/stats.js"></script>
+    <script src="../shared/profile.js"></script>
+    <script>
+        let fileData = null;
+        let profiles = [];
+        let currentTest = 'anova';
+
+        const GROUP_MAX = 30;
+
+        const TESTS = {
+            anova: {
+                name: 'Compare 3+ groups',
+                sub: 'One-way ANOVA',
+                blurb: 'Asks whether the averages of a number differ across the values of a grouping column. Use it when you have three or more groups. With exactly two groups it gives the same answer as a t-test.',
+                fields: [
+                    { id: 'measure', label: 'Measure', kind: 'numeric' },
+                    { id: 'group', label: 'Grouped by', kind: 'group' }
+                ]
+            },
+            ttest: {
+                name: 'Compare 2 groups',
+                sub: 'Two-sample t-test',
+                blurb: 'Asks whether two groups differ on average. Welch is used by default, which does not assume the two groups have the same spread. Tick the box to use the classic pooled Student version instead.',
+                fields: [
+                    { id: 'measure', label: 'Measure', kind: 'numeric' },
+                    { id: 'group', label: 'Split by', kind: 'group2' }
+                ]
+            },
+            paired: {
+                name: 'Before and after',
+                sub: 'Paired t-test',
+                blurb: 'Asks whether two measurements taken on the same rows differ. Use it for before and after columns, or two readings of the same thing. Each row is one pair.',
+                fields: [
+                    { id: 'before', label: 'First measure', kind: 'numeric' },
+                    { id: 'after', label: 'Second measure', kind: 'numeric' }
+                ]
+            },
+            chi: {
+                name: 'Two categories',
+                sub: 'Chi-square independence',
+                blurb: 'Asks whether two categorical columns are related, or whether the split of one is the same regardless of the other. Counts rows, so it needs no numeric column at all.',
+                fields: [
+                    { id: 'rows', label: 'Rows', kind: 'group' },
+                    { id: 'cols', label: 'Columns', kind: 'group' }
+                ]
+            },
+            correlation: {
+                name: 'Do two numbers move together',
+                sub: 'Pearson and Spearman',
+                blurb: 'Measures whether two numbers rise and fall together. Pearson looks for a straight-line relationship, Spearman only for a consistent direction, so a curved relationship shows up much more strongly in Spearman.',
+                fields: [
+                    { id: 'x', label: 'First number', kind: 'numeric' },
+                    { id: 'y', label: 'Second number', kind: 'numeric' }
+                ]
+            },
+            regression: {
+                name: 'Predict one from another',
+                sub: 'Simple linear regression',
+                blurb: 'Fits a straight line and reports how much of the movement it explains. The slope says how much the outcome shifts per unit of the predictor, and the p value says whether that slope is distinguishable from flat.',
+                fields: [
+                    { id: 'x', label: 'Predictor', kind: 'numeric' },
+                    { id: 'y', label: 'Outcome', kind: 'numeric' }
+                ]
+            }
+        };
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md bg-red-50 border border-red-300 text-red-500';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        function escapeHtml(str) {
+            return String(str === null || str === undefined ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function numericShare(name) {
+            const present = fileData.rows.map(r => r[name]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+            if (present.length === 0) return 0;
+            return present.filter(v => profileToNumber(v) !== null).length / present.length;
+        }
+
+        function numericColumns() {
+            return profiles
+                .filter(p => p.type !== 'date' && p.distinctCount >= 2 && numericShare(p.name) >= 0.9)
+                .map(p => p.name);
+        }
+
+        function groupColumns(maxGroups) {
+            const cap = maxGroups || GROUP_MAX;
+            return profiles.filter(p => p.distinctCount >= 2 && p.distinctCount <= cap).map(p => p.name);
+        }
+
+        function columnValues(name) {
+            return fileData.rows.map(r => profileToNumber(r[name]));
+        }
+
+        function renderTestPicker() {
+            document.getElementById('test-picker').innerHTML = Object.keys(TESTS).map(key => {
+                const t = TESTS[key];
+                const active = key === currentTest;
+                return `
+                    <button onclick="selectTest('${key}')" class="text-left border rounded-lg p-3 transition-colors ${active ? 'border-[#0062F1] bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}">
+                        <p class="text-sm font-semibold ${active ? 'text-[#0062F1]' : 'text-[#00133C]'}">${escapeHtml(t.name)}</p>
+                        <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(t.sub)}</p>
+                    </button>`;
+            }).join('');
+
+            document.getElementById('test-blurb').innerText = TESTS[currentTest].blurb;
+        }
+
+        function optionsFor(kind) {
+            if (kind === 'numeric') return numericColumns();
+            if (kind === 'group2') return groupColumns(GROUP_MAX);
+            return groupColumns(GROUP_MAX);
+        }
+
+        function renderFieldPicker() {
+            const test = TESTS[currentTest];
+            const picker = document.getElementById('field-picker');
+
+            picker.innerHTML = test.fields.map(f => {
+                const opts = optionsFor(f.kind);
+                if (opts.length === 0) {
+                    return `<p class="text-xs text-amber-700">No column in this file can act as "${escapeHtml(f.label)}" for this test.</p>`;
+                }
+                return `
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                        ${escapeHtml(f.label)}
+                        <select id="field-${f.id}" class="mt-1 block border border-slate-300 rounded-lg px-3 py-2 text-sm text-[#00133C] font-normal normal-case tracking-normal min-w-[12rem]">
+                            ${opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
+                        </select>
+                    </label>`;
+            }).join('');
+
+            if (test.fields.length === 2 && test.fields[0].id === 'measure' && test.fields[1].kind !== 'group2') {
+                const second = document.getElementById('field-' + test.fields[1].id);
+                if (second && second.options.length > 1) second.selectedIndex = 0;
+            }
+
+            document.getElementById('pooled-wrap').className = currentTest === 'ttest'
+                ? 'flex items-center gap-2 text-xs text-slate-600'
+                : 'hidden items-center gap-2 text-xs text-slate-600';
+        }
+
+        function selectTest(key) {
+            currentTest = key;
+            document.getElementById('result').className = 'hidden';
+            renderTestPicker();
+            renderFieldPicker();
+        }
+
+        function verdictBox(significant, text, caveat) {
+            const tone = significant ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200';
+            return `
+                <div class="border rounded-lg p-4 mb-4 ${tone}">
+                    <p class="text-sm text-[#00133C] leading-relaxed">${escapeHtml(text)}</p>
+                    ${caveat ? `<p class="text-xs text-amber-700 mt-2 leading-relaxed">${escapeHtml(caveat)}</p>` : ''}
+                </div>`;
+        }
+
+        function statLine(items) {
+            return `<div class="flex flex-wrap gap-4 text-xs text-slate-600 mb-4">${items.map(i =>
+                `<span>${escapeHtml(i[0])} = <strong class="text-[#00133C]">${escapeHtml(i[1])}</strong></span>`).join('')}</div>`;
+        }
+
+        function pText(p) {
+            return p < 0.0001 ? 'less than 0.0001' : p.toFixed(4);
+        }
+
+        function groupTable(rows, headers) {
+            return `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead><tr class="border-b border-slate-200 text-slate-600 uppercase">
+                            ${headers.map(h => `<th class="py-2 px-3">${escapeHtml(h)}</th>`).join('')}
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        function assumptionNote(text) {
+            return `<p class="text-[10px] text-slate-500 mt-4 leading-relaxed">${escapeHtml(text)}</p>`;
+        }
+
+        function show(html) {
+            const box = document.getElementById('result');
+            box.className = 'bg-white border border-slate-200 rounded-xl p-5';
+            box.innerHTML = html;
+        }
+
+        function fail(reason) {
+            show(`<p class="text-sm text-amber-700">${escapeHtml(reason)}</p>`);
+        }
+
+        function bucketBy(groupCol, measureCol) {
+            const buckets = new Map();
+            for (const row of fileData.rows) {
+                const key = row[groupCol];
+                if (key === null || key === undefined || String(key).trim() === '') continue;
+                const value = profileToNumber(row[measureCol]);
+                if (value === null) continue;
+                const label = String(key);
+                if (!buckets.has(label)) buckets.set(label, []);
+                buckets.get(label).push(value);
+            }
+            return buckets;
+        }
+
+        function runAnova() {
+            const measure = document.getElementById('field-measure').value;
+            const group = document.getElementById('field-group').value;
+            if (measure === group) return fail('Pick two different columns.');
+
+            const buckets = bucketBy(group, measure);
+            const result = statsAnova(Array.from(buckets.entries()).map(([label, values]) => ({ label, values })));
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const share = (result.etaSquared * 100).toFixed(1);
+
+            const verdict = significant
+                ? `The average ${measure} really does differ across ${group}. p is ${pText(result.p)}, below the usual 0.05 line, and ${group} accounts for ${share} percent of the variation in ${measure}.`
+                : `There is no clear difference in ${measure} between the ${group} groups. p is ${pText(result.p)}, above the usual 0.05 line, so these gaps are within what random variation produces anyway. That is not proof they are identical, only that this data cannot tell them apart.`;
+
+            const rows = result.groups.slice().sort((a, b) => b.mean - a.mean).map(g => `
+                <tr class="border-b border-slate-100">
+                    <td class="py-1.5 px-3 font-medium text-slate-800">${escapeHtml(g.label)}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.n.toLocaleString()}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.mean.toFixed(2)}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.sd.toFixed(2)}</td>
+                </tr>`).join('');
+
+            show(
+                verdictBox(significant, verdict) +
+                statLine([
+                    [`F(${result.dfBetween}, ${result.dfWithin})`, result.f.toFixed(4)],
+                    ['p', pText(result.p)],
+                    ['eta squared', result.etaSquared.toFixed(4)],
+                    ['grand mean', result.grandMean.toFixed(2)]
+                ]) +
+                groupTable(rows, [group, 'Rows', 'Mean ' + measure, 'Std Dev']) +
+                assumptionNote('One-way ANOVA assumes the groups are independent and roughly similar in spread. With very uneven group sizes or a strong outlier, treat a borderline p value with suspicion rather than as a verdict.')
+            );
+        }
+
+        function runTTest() {
+            const measure = document.getElementById('field-measure').value;
+            const group = document.getElementById('field-group').value;
+            if (measure === group) return fail('Pick two different columns.');
+
+            const buckets = bucketBy(group, measure);
+            if (buckets.size !== 2) {
+                return fail(`A two-sample t-test needs exactly two groups. "${group}" has ${buckets.size}. Use Compare 3+ groups instead, or pick a column with two values.`);
+            }
+
+            const entries = Array.from(buckets.entries());
+            const pooled = document.getElementById('opt-pooled').checked;
+            const result = statsTTest(entries[0][1], entries[1][1], { pooled });
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const [a, b] = result.groups;
+            const diff = result.meanDifference;
+
+            const verdict = significant
+                ? `${entries[0][0]} and ${entries[1][0]} really do differ on ${measure}. The gap is ${Math.abs(diff).toFixed(2)}, with ${diff > 0 ? entries[0][0] : entries[1][0]} higher, and p is ${pText(result.p)}.`
+                : `There is no clear difference in ${measure} between ${entries[0][0]} and ${entries[1][0]}. The gap of ${Math.abs(diff).toFixed(2)} comes with a p of ${pText(result.p)}, which is inside what chance would produce at these sample sizes.`;
+
+            const rows = [[entries[0][0], a], [entries[1][0], b]].map(([label, g]) => `
+                <tr class="border-b border-slate-100">
+                    <td class="py-1.5 px-3 font-medium text-slate-800">${escapeHtml(label)}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.n.toLocaleString()}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.mean.toFixed(2)}</td>
+                    <td class="py-1.5 px-3 text-slate-700">${g.sd.toFixed(2)}</td>
+                </tr>`).join('');
+
+            show(
+                verdictBox(significant, verdict) +
+                statLine([
+                    ['t', result.t.toFixed(4)],
+                    ['df', result.df.toFixed(2)],
+                    ['p', pText(result.p)],
+                    ['difference', diff.toFixed(2)],
+                    ['method', result.kind === 'welch' ? 'Welch' : 'Student pooled']
+                ]) +
+                groupTable(rows, [group, 'Rows', 'Mean ' + measure, 'Std Dev']) +
+                assumptionNote(result.kind === 'welch'
+                    ? 'Welch does not assume the two groups share a spread, which is why its degrees of freedom are usually fractional. It is the safer default.'
+                    : 'The pooled version assumes both groups have the same underlying spread. If their standard deviations look very different, untick the box and use Welch instead.')
+            );
+        }
+
+        function runPaired() {
+            const before = document.getElementById('field-before').value;
+            const after = document.getElementById('field-after').value;
+            if (before === after) return fail('Pick two different columns.');
+
+            const result = statsTTest(columnValues(before), columnValues(after), { paired: true });
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const direction = result.meanDifference > 0 ? 'higher' : 'lower';
+
+            const verdict = significant
+                ? `${before} is reliably ${direction} than ${after}, by ${Math.abs(result.meanDifference).toFixed(2)} on average across ${result.n} pairs. p is ${pText(result.p)}.`
+                : `There is no reliable difference between ${before} and ${after}. The average gap of ${Math.abs(result.meanDifference).toFixed(2)} across ${result.n} pairs comes with a p of ${pText(result.p)}.`;
+
+            show(
+                verdictBox(significant, verdict) +
+                statLine([
+                    ['t', result.t.toFixed(4)],
+                    ['df', String(result.df)],
+                    ['p', pText(result.p)],
+                    ['mean difference', result.meanDifference.toFixed(3)],
+                    ['pairs', String(result.n)]
+                ]) +
+                assumptionNote('A paired test only makes sense when each row is genuinely the same subject measured twice. Rows where either value is missing are dropped from the pairing.')
+            );
+        }
+
+        function runChi() {
+            const rowCol = document.getElementById('field-rows').value;
+            const colCol = document.getElementById('field-cols').value;
+            if (rowCol === colCol) return fail('Pick two different columns.');
+
+            const rowLabels = [];
+            const colLabels = [];
+            const counts = new Map();
+
+            for (const row of fileData.rows) {
+                const a = row[rowCol];
+                const b = row[colCol];
+                if (a === null || a === undefined || String(a).trim() === '') continue;
+                if (b === null || b === undefined || String(b).trim() === '') continue;
+
+                const ka = String(a);
+                const kb = String(b);
+                if (!rowLabels.includes(ka)) rowLabels.push(ka);
+                if (!colLabels.includes(kb)) colLabels.push(kb);
+                const key = JSON.stringify([ka, kb]);
+                counts.set(key, (counts.get(key) || 0) + 1);
+            }
+
+            const table = rowLabels.map(ra => colLabels.map(cb => counts.get(JSON.stringify([ra, cb])) || 0));
+            const result = statsChiSquareIndependence(table);
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const verdict = significant
+                ? `${rowCol} and ${colCol} are related. The mix of ${colCol} changes depending on ${rowCol}, with p of ${pText(result.p)}. Cramers V of ${result.cramersV.toFixed(3)} says how strong that link is, where 0 is none and 1 is total.`
+                : `${rowCol} and ${colCol} look independent. The mix of ${colCol} is about the same whichever ${rowCol} you look at, with p of ${pText(result.p)}.`;
+
+            const caveat = result.smallestExpected < 5
+                ? `The smallest expected count is ${result.smallestExpected.toFixed(2)}. Chi-square is unreliable below about 5, so treat this result as indicative rather than settled and consider combining the thinnest categories.`
+                : '';
+
+            const body = rowLabels.map((label, r) => `
+                <tr class="border-b border-slate-100">
+                    <td class="py-1.5 px-3 font-medium text-slate-800">${escapeHtml(label)}</td>
+                    ${table[r].map(v => `<td class="py-1.5 px-3 text-slate-700">${v.toLocaleString()}</td>`).join('')}
+                </tr>`).join('');
+
+            show(
+                verdictBox(significant, verdict, caveat) +
+                statLine([
+                    ['chi-square', result.chiSquare.toFixed(4)],
+                    ['df', String(result.df)],
+                    ['p', pText(result.p)],
+                    ['Cramers V', result.cramersV.toFixed(4)],
+                    ['rows counted', result.total.toLocaleString()]
+                ]) +
+                groupTable(body, [rowCol + ' \\ ' + colCol].concat(colLabels)) +
+                assumptionNote('Chi-square compares the counts you have against the counts you would expect if the two columns were unrelated. It tests whether a link exists, not which direction it runs in.')
+            );
+        }
+
+        function runCorrelation() {
+            const x = document.getElementById('field-x').value;
+            const y = document.getElementById('field-y').value;
+            if (x === y) return fail('Pick two different columns.');
+
+            const result = statsCorrelation(columnValues(x), columnValues(y));
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const strength = Math.abs(result.r) >= 0.7 ? 'strong' : Math.abs(result.r) >= 0.4 ? 'moderate' : 'weak';
+            const direction = result.r > 0 ? 'together' : 'in opposite directions';
+
+            const verdict = significant
+                ? `${x} and ${y} move ${direction}, and the link is ${strength}. r is ${result.r.toFixed(3)}, so ${x} explains about ${(result.rSquared * 100).toFixed(1)} percent of the movement in ${y}. p is ${pText(result.p)}.`
+                : `There is no reliable relationship between ${x} and ${y}. r is ${result.r.toFixed(3)} with a p of ${pText(result.p)}, which is inside what chance produces at this sample size.`;
+
+            const curved = result.spearman !== null && Math.abs(result.spearman) - Math.abs(result.r) > 0.15
+                ? `Spearman is noticeably stronger than Pearson here, which usually means the relationship is real but curved rather than a straight line.`
+                : '';
+
+            show(
+                verdictBox(significant, verdict, curved) +
+                statLine([
+                    ['Pearson r', result.r.toFixed(4)],
+                    ['r squared', result.rSquared.toFixed(4)],
+                    ['p', pText(result.p)],
+                    ['Spearman', result.spearman === null ? 'n/a' : result.spearman.toFixed(4)],
+                    ['pairs', String(result.n)]
+                ]) +
+                assumptionNote('Correlation is not causation, and it is easily distorted by a single extreme point. Pearson measures a straight-line link; Spearman only asks whether the two consistently rise and fall together.')
+            );
+        }
+
+        function runRegression() {
+            const x = document.getElementById('field-x').value;
+            const y = document.getElementById('field-y').value;
+            if (x === y) return fail('Pick two different columns.');
+
+            const result = statsLinearFit(columnValues(x), columnValues(y));
+            if (!result.ok) return fail(result.reason);
+
+            const significant = result.p < 0.05;
+            const verdict = significant
+                ? `${y} does move with ${x}. Every extra unit of ${x} goes with a change of ${result.slope.toFixed(4)} in ${y}, and the line explains ${(result.rSquared * 100).toFixed(1)} percent of the movement. p is ${pText(result.p)}.`
+                : `The slope is not distinguishable from flat. The fitted change of ${result.slope.toFixed(4)} in ${y} per unit of ${x} comes with a p of ${pText(result.p)}, so this data does not support a real relationship.`;
+
+            show(
+                verdictBox(significant, verdict) +
+                statLine([
+                    ['slope', result.slope.toFixed(4)],
+                    ['intercept', result.intercept.toFixed(4)],
+                    ['r squared', result.rSquared.toFixed(4)],
+                    ['p', pText(result.p)],
+                    ['rows used', String(result.n)]
+                ]) +
+                `<p class="text-xs text-slate-600">Fitted line: ${escapeHtml(y)} = ${result.slope.toFixed(4)} × ${escapeHtml(x)} ${result.intercept >= 0 ? '+' : '-'} ${Math.abs(result.intercept).toFixed(4)}</p>` +
+                assumptionNote('A straight line is only one shape. A high r squared says the line fits, not that the relationship is causal or that it keeps holding outside the range of data you have.')
+            );
+        }
+
+        function runTest() {
+            if (!fileData) return fail('Load a file first.');
+
+            try {
+                if (currentTest === 'anova') return runAnova();
+                if (currentTest === 'ttest') return runTTest();
+                if (currentTest === 'paired') return runPaired();
+                if (currentTest === 'chi') return runChi();
+                if (currentTest === 'correlation') return runCorrelation();
+                if (currentTest === 'regression') return runRegression();
+            } catch (err) {
+                fail('That test could not be run on these columns: ' + err.message);
+            }
+        }
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                fileData = await parseFileToRows(file);
+                profiles = profileDataset(fileData.columns, fileData.rows);
+
+                document.getElementById('file-status').innerText =
+                    `${file.name} | ${fileData.rows.length.toLocaleString()} rows, ${fileData.columns.length} columns`;
+                document.getElementById('workspace').className = 'space-y-6';
+                document.getElementById('result').className = 'hidden';
+
+                renderTestPicker();
+                renderFieldPicker();
+            } catch (err) {
+                showToast('Could not parse file: ' + err.message);
+            }
+        });
+
+        function statTestsDataset() {
+            if (!fileData) return null;
+            return { columns: fileData.columns, rows: fileData.rows };
+        }
+</script>
+
+    <script src="../shared/sheet-connect.js"></script>
+    <script src="../shared/sheet-input.js"></script>
+    <script src="../shared/definitions-data.js"></script>
+    <script src="../shared/definitions.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        window.signalNoirToolContext = () => {
+            const box = document.getElementById('result');
+            const text = box && !box.className.includes('hidden') ? box.innerText.replace(/\s+/g, ' ').trim() : "";
+            return {
+                summary: text ? "A statistical test result was on screen." : "Statistical Tests was open.",
+                facts: text ? text.split('. ').slice(0, 4).map(part => part.trim()).filter(Boolean) : [],
+                suggestedPrompt: text ? "Explain this result in plain English" : "Run the appropriate statistical test",
+                datasets: fileData ? [{ name: 'stat-tests-data.csv', columns: fileData.columns, rows: fileData.rows }] : []
+            };
+        };
+
+        vanessaInit({ tool: 'stat-tests', getDataset: statTestsDataset });
+        definitionsInit({ tool: 'stat-tests' });
+</script>
+    <script src="../shared/catalog.js"></script>
+    <script src="../shared/resilience.js"></script>
+    <script src="../shared/access.js"></script>
+    <script src="../shared/access-ui.js"></script>
+    <script src="../shared/artifacts.js"></script>
+    <script src="../shared/project-service.js"></script>
+    <script src="../shared/operations.js"></script>
+    <script src="../shared/platform.js"></script>
+</body>
+</html>

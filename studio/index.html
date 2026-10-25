@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <title>Signal Noir Studio</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="stylesheet" href="../../tailwind.css">
+  <link rel="stylesheet" href="../shared/design-system.css">
+  <link rel="stylesheet" href="studio.css">
+  <link rel="stylesheet" href="source-guide.css">
+  <link rel="stylesheet" href="intelligence.css">
+  <link rel="stylesheet" href="analyst.css">
+  <link rel="stylesheet" href="collaboration.css">
+  <link rel="stylesheet" href="operations.css">
+  <link rel="stylesheet" href="experience.css">
+  <link rel="stylesheet" href="evidence.css">
+  <link rel="stylesheet" href="pulse.css">
+  <link rel="stylesheet" href="command-center.css">
+  <link rel="stylesheet" href="portfolio.css">
+  <link rel="stylesheet" href="studio-skin.css">
+  <link rel="stylesheet" href="studio-shell.css">
+  <link rel="stylesheet" href="project-home.css">
+  <link rel="stylesheet" href="ops-view.css">
+  <link rel="stylesheet" href="vanessa/vanessa.css">
+  <script src="../shared/theme.js"></script>
+</head>
+<body class="studio-app sn-scope">
+  <a class="sn-skip-link" href="#studio-main">Skip to workspace</a>
+  <header class="studio-topbar">
+    <button type="button" class="sn-btn sn-btn-ghost sn-btn-icon studio-sidebar-toggle" id="sidebar-toggle" aria-controls="studio-sidebar" aria-expanded="false" aria-label="Open navigation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <a href="../../index.html" class="sn-brand studio-brand" aria-label="Signal Noir home"><span class="sn-brand-mark" aria-hidden="true">SN</span><span class="sn-brand-name">Signal <span>Noir</span></span></a>
+    <span class="studio-crumb-sep" aria-hidden="true">/</span>
+    <div class="studio-project-title">
+      <strong id="topbar-project-name">Loading project…</strong>
+      <button type="button" id="project-mode-btn" class="studio-mode-pill" aria-haspopup="dialog"><span class="sn-dot" aria-hidden="true"></span><span id="project-mode-label">Local</span><span class="sn-sr-only"> project mode. Change mode</span></button>
+    </div>
+    <div class="project-controls">
+      <span id="save-status" class="save-status" aria-live="polite">Saved</span>
+      <button type="button" id="open-command-btn" class="sn-nav-search command-launch" aria-label="Search Signal Noir and run commands" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="sn-nav-search-label">Search</span><span class="sn-kbd">⌘K</span></button>
+      <button type="button" id="open-chat-btn" class="sn-btn sn-btn-ghost sn-btn-sm chat-launch">Chat <span id="chat-unread" hidden>0</span></button>
+      <details class="studio-more">
+        <summary class="sn-btn sn-btn-ghost sn-btn-icon" aria-label="More project actions">⋯</summary>
+        <nav id="studio-action-dock" class="studio-more-menu" aria-label="Project actions">
+          <button type="button" id="start-presentation-btn" aria-label="Start presentation mode"><span>▶</span>Present findings</button>
+          <button type="button" id="save-analysis-view-btn" aria-label="Save the current analysis view"><span>＋</span>Save current view</button>
+          <button type="button" id="open-saved-views-btn" aria-label="Open saved analysis views"><span>◫</span>Saved views <b id="saved-view-count">0</b></button>
+          <button type="button" id="history-btn" aria-label="Project change history"><span>↶</span>Dashboard history</button>
+          <button type="button" id="focus-mode-btn" aria-label="Toggle focus mode"><span>◇</span>Focus</button>
+          <button type="button" aria-label="Switch between light and dark theme" data-theme-toggle><span>◐</span>Light / dark theme</button>
+        </nav>
+      </details>
+      <button type="button" id="save-project-btn" class="sn-btn sn-btn-primary sn-btn-sm">Save</button>
+      <button type="button" id="context-toggle" class="sn-btn sn-btn-ghost sn-btn-icon" aria-controls="studio-context" aria-expanded="true" aria-label="Toggle context panel"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+    </div>
+  </header>
+
+  <div class="studio-shell">
+    <aside class="studio-sidebar" id="studio-sidebar" aria-label="Studio navigation">
+      <div class="sidebar-project">
+        <label class="sidebar-label" for="project-select">Project</label>
+        <select id="project-select" class="sn-select"></select>
+        <button type="button" id="new-project-btn" class="sn-btn sn-btn-sm sn-btn-block">＋ New project</button>
+      </div>
+      <nav id="studio-nav" aria-label="Studio sections">
+        <div class="nav-group"><span class="nav-group-label">Workspace</span>
+          <button data-view="vanessa" data-capability="vanessa.use" data-mode-min="guided" class="nav-item active" aria-current="page"><span aria-hidden="true">V</span>Vanessa</button>
+          <button data-view="overview" data-capability="analysis.basic" data-mode-min="guided" class="nav-item"><span aria-hidden="true">⌂</span>Project home</button>
+          <button data-view="artifacts" data-capability="analysis.basic" data-mode-min="guided" class="nav-item"><span aria-hidden="true">◈</span>Work<b class="nav-count" id="nav-artifacts-count"></b></button>
+          <button data-view="operations-hub" data-capability="operations.view" data-mode-min="guided" class="nav-item"><span aria-hidden="true">↻</span>Operations<b class="nav-count" id="nav-ops-count"></b></button>
+        </div>
+        <div class="nav-group"><span class="nav-group-label">Data</span>
+          <button data-view="data" data-capability="data.import" data-mode-min="guided" class="nav-item"><span aria-hidden="true">▦</span>Sources</button>
+          <button data-view="quality" data-capability="data.clean" data-mode-min="standard" class="nav-item"><span aria-hidden="true">✓</span>Quality</button>
+          <button data-view="dictionary" data-capability="metrics.manage" data-mode-min="expert" class="nav-item"><span aria-hidden="true">Aa</span>Dictionary</button>
+        </div>
+        <div class="nav-group"><span class="nav-group-label">Analysis</span>
+          <button data-view="analyst" data-capability="analysis.basic" data-mode-min="guided" class="nav-item"><span aria-hidden="true">✦</span>Analyst Lab</button>
+          <button data-view="intelligence" data-capability="analysis.advanced" data-mode-min="standard" class="nav-item"><span aria-hidden="true">◇</span>Intelligence</button>
+          <button data-view="workflow" data-capability="workflows.view" data-mode-min="standard" class="nav-item"><span aria-hidden="true">⌁</span>Workflows</button>
+        </div>
+        <div class="nav-group"><span class="nav-group-label">Present</span>
+          <button data-view="dashboard" data-capability="dashboards.view" data-mode-min="guided" class="nav-item"><span aria-hidden="true">▥</span>Dashboards</button>
+          <button data-view="report" data-capability="reports.create" data-mode-min="guided" class="nav-item"><span aria-hidden="true">▤</span>Reports</button>
+          <button data-view="portfolio" data-capability="privacy.manage" data-mode-min="standard" class="nav-item"><span aria-hidden="true">◈</span>Portfolio</button>
+        </div>
+        <div class="nav-group"><span class="nav-group-label">Organization</span>
+          <button data-view="operations" data-capability="decisions.manage" data-mode-min="standard" class="nav-item"><span aria-hidden="true">◎</span>Decisions &amp; tasks</button>
+          <button data-view="automate" data-capability="projects.share" data-mode-min="standard" class="nav-item"><span aria-hidden="true">↻</span>Automate &amp; share</button>
+          <button data-view="builder" data-capability="workflows.create" data-mode-min="expert" class="nav-item"><span aria-hidden="true">＋</span>Tool builder</button>
+        </div>
+      </nav>
+      <div class="sidebar-foot">
+        <label class="mode-control" for="workspace-mode"><span>Show</span><select id="workspace-mode" class="sn-select" aria-label="How many Studio tools to show"><option value="guided">Essentials</option><option value="standard">Standard</option><option value="expert">Everything</option></select></label>
+        <div class="sidebar-status"><span class="status-dot" aria-hidden="true"></span><div><strong>Local-first</strong><small id="ai-status">Deterministic engine</small></div></div>
+        <a class="sidebar-link" href="../index.html">All tools <span aria-hidden="true">↗</span></a>
+      </div>
+    </aside>
+
+    <main class="studio-main" id="studio-main" tabindex="-1">
+      <section id="view-vanessa" class="studio-view active" aria-labelledby="vanessa-title">
+        <div class="vn-head">
+          <div class="vn-head-top">
+            <span class="sn-eyebrow"><i></i><span id="vn-project-kind">Local project</span></span>
+            <div class="vn-convbar">
+              <label class="sn-sr-only" for="vn-conversations">Conversation</label>
+              <select id="vn-conversations" class="sn-select vn-conv-select"></select>
+              <button type="button" class="sn-btn sn-btn-sm" id="vn-new-conversation" title="Start a new conversation in this project. Data and outputs stay.">＋ New conversation</button>
+              <button type="button" class="vn-provider-chip" id="vn-provider" aria-haspopup="dialog" title="Choose how Vanessa reasons"></button>
+            </div>
+          </div>
+          <h1 id="vanessa-title" class="vn-title">Project</h1>
+          <p class="vn-sub" id="vn-project-summary"></p>
+        </div>
+        <div id="vn-announcer" class="sn-sr-only" role="status" aria-live="polite"></div>
+        <div id="vn-demo-banner" class="sn-callout sn-callout-preview vn-demo-banner" hidden><span aria-hidden="true">▶</span><span><strong>This is the demo project.</strong> It uses generated sample data for a fictional retailer so you can see how Signal Noir works. Nothing you do here touches your real projects.</span><button type="button" class="sn-btn sn-btn-sm" data-leave-demo>Start a real project</button></div>
+        <div id="vn-empty" class="vn-empty"></div>
+        <div id="vn-feed" class="vn-feed" aria-live="polite" aria-relevant="additions"></div>
+        <div class="vn-composer-wrap" id="vn-composer-wrap">
+          <form id="vn-form" class="vn-composer" autocomplete="off">
+            <label for="vn-input" class="sn-sr-only">Ask Vanessa</label>
+            <textarea id="vn-input" class="vn-input" rows="1" placeholder="Ask Vanessa what you want to accomplish…" aria-describedby="vn-shortcuts" aria-label="Ask Vanessa what you want to accomplish"></textarea>
+            <div class="vn-composer-bar">
+              <input type="file" id="vn-file" hidden multiple accept=".csv,.tsv,.txt,.json,.xlsx,.xls,.xlsm,.zip">
+              <button type="button" class="sn-btn sn-btn-ghost sn-btn-sm" id="vn-attach" aria-label="Add data files"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 12-8.6 8.6a5 5 0 0 1-7-7L14 5a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg><span class="vn-hide-sm">Add data</span></button>
+              <label class="vn-scope"><span class="sn-sr-only">Dataset to use</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><select id="vn-scope" aria-label="Dataset Vanessa should use"></select></label>
+              <button type="button" class="sn-btn sn-btn-ghost sn-btn-sm" id="vn-quick-toggle" aria-expanded="false" aria-controls="vn-quick">Quick actions</button>
+              <span class="vn-privacy" id="vn-shortcuts"><span class="sn-kbd">↵</span> run · <span class="sn-kbd">⇧↵</span> new line · <span class="sn-kbd">Esc</span> stop</span>
+              <button type="submit" class="sn-btn sn-btn-accent sn-btn-sm" id="vn-submit" data-mode="run">Run <span aria-hidden="true">↵</span></button>
+            </div>
+          </form>
+          <div class="vn-suggestions" id="vn-quick" aria-label="Quick actions" hidden></div>
+        </div>
+      </section>
+
+      <section id="view-outputs" class="studio-view" aria-labelledby="outputs-title">
+        <div class="view-heading"><div><span class="eyebrow">Project outputs</span><h2 id="outputs-title">Everything this project has produced</h2><p>Findings, charts, dashboards, reports, decisions, tasks and workflows accumulate here as you work.</p></div></div>
+        <div class="sn-tabs outputs-tabs" role="tablist" aria-label="Output types" id="outputs-tabs"></div>
+        <div id="outputs-list" class="outputs-list" role="tabpanel"></div>
+      </section>
+
+      <section id="view-overview" class="studio-view">
+        <header class="project-home-head">
+          <div class="project-home-title">
+            <span class="eyebrow">Project</span>
+            <h2 id="overview-title">Untitled project</h2>
+            <p id="project-home-description" class="project-home-description"></p>
+            <div class="project-home-meta" id="project-home-meta"></div>
+          </div>
+          <div class="project-home-actions sn-cluster">
+            <button type="button" class="sn-btn sn-btn-sm" id="project-settings-btn">Project settings</button>
+            <button class="sn-btn sn-btn-sm sn-btn-ghost" id="export-project-btn">Export</button>
+          </div>
+        </header>
+
+        <div class="project-home-ask">
+          <label class="sn-sr-only" for="project-home-prompt">Ask Vanessa about this project</label>
+          <form id="project-home-form" class="project-home-form">
+            <span class="project-home-avatar" aria-hidden="true">V</span>
+            <input id="project-home-prompt" autocomplete="off" placeholder="What do you want to know about this project?" aria-label="What do you want to know about this project?">
+            <button type="submit" class="sn-btn sn-btn-sm sn-btn-accent">Ask Vanessa</button>
+          </form>
+          <div class="project-home-starters sn-cluster" id="project-home-starters"></div>
+        </div>
+
+        <div class="project-home-grid">
+          <section class="project-panel" aria-labelledby="ph-data-title">
+            <div class="project-panel-head"><h3 id="ph-data-title">Data</h3><button type="button" class="sn-link sn-small" data-ph-goto="data">Open</button></div>
+            <div id="ph-data"></div>
+          </section>
+          <section class="project-panel" aria-labelledby="ph-findings-title">
+            <div class="project-panel-head"><h3 id="ph-findings-title">Key findings</h3><button type="button" class="sn-link sn-small" data-ph-goto="artifacts">All</button></div>
+            <div id="ph-findings"></div>
+          </section>
+          <section class="project-panel" aria-labelledby="ph-outputs-title">
+            <div class="project-panel-head"><h3 id="ph-outputs-title">Outputs</h3><button type="button" class="sn-link sn-small" data-ph-goto="outputs">All</button></div>
+            <div id="ph-outputs"></div>
+          </section>
+          <section class="project-panel" aria-labelledby="ph-work-title">
+            <div class="project-panel-head"><h3 id="ph-work-title">Decisions &amp; tasks</h3><button type="button" class="sn-link sn-small" data-ph-goto="artifacts">All</button></div>
+            <div id="ph-work"></div>
+          </section>
+          <section class="project-panel project-panel-wide" aria-labelledby="ph-activity-title">
+            <div class="project-panel-head"><h3 id="ph-activity-title">Recent activity</h3></div>
+            <div id="ph-activity"></div>
+          </section>
+        </div>
+
+        <details class="project-home-more">
+          <summary>Project health, readiness and the classic overview</summary>
+          <div class="project-home-more-body">
+
+        <div class="metric-grid" id="overview-metrics"></div>
+
+        <article id="next-step-card" class="next-step-card" aria-live="polite"></article>
+
+        <section class="ask-data-layout">
+          <article class="surface ask-data-card">
+            <div class="ask-data-lockup"><span>V</span><div><span class="eyebrow">Ask your data</span><h3>Get an answer, then inspect the proof.</h3></div></div>
+            <form id="ask-data-form" class="ask-data-form"><input id="ask-data-input" autocomplete="off" placeholder="Try: total revenue by region" aria-label="Ask a question about your data"><button class="button primary">Analyze</button></form>
+            <div id="ask-data-suggestions" class="ask-data-suggestions"></div>
+            <div id="ask-data-result" class="ask-data-result empty">Add a dataset, then ask about totals, averages, categories, minimums, maximums, or top groups.</div>
+          </article>
+          <article class="surface project-pulse-card">
+            <div class="surface-head"><div><span class="eyebrow">Live project pulse</span><h3>What needs attention?</h3></div><button id="refresh-pulse-btn" class="icon-button" aria-label="Refresh project pulse">Refresh</button></div>
+            <div id="project-pulse" class="project-pulse"></div>
+          </article>
+        </section>
+
+        <article id="pinned-insights-panel" class="surface pinned-insights-panel" hidden><div class="surface-head"><div><span class="eyebrow">Decision board</span><h3>Pinned answers</h3></div><span id="pinned-insights-count" class="badge"></span></div><div id="pinned-insights" class="pinned-insights"></div></article>
+
+        <div class="overview-grid">
+          <article class="surface hero-surface">
+            <span class="eyebrow light">Ask Vanessa</span>
+            <h3>What should this project accomplish?</h3>
+            <textarea id="project-goal" rows="3" placeholder="Example: Clean these monthly files, flag quality problems, analyze revenue, and prepare an executive report." aria-label="Project goal"></textarea>
+            <div class="action-row">
+              <button id="goal-plan-btn" class="button white" aria-label="Build my workflow">Build my workflow</button>
+              <button id="goal-ai-btn" class="button glass" aria-label="Use a local model when available">Use local AI when available</button>
+            </div>
+            <div id="goal-response" class="assistant-response" hidden></div>
+          </article>
+
+          <article class="surface">
+            <div class="surface-head"><div><span class="eyebrow">Recent activity</span><h3>Project timeline</h3></div></div>
+            <div id="activity-list" class="activity-list"></div>
+          </article>
+        </div>
+
+        <article class="surface">
+          <div class="surface-head"><div><span class="eyebrow">Quick start</span><h3>Common analytics recipes</h3></div></div>
+          <div id="recipe-gallery" class="recipe-gallery"></div>
+        </article>
+          </div>
+        </details>
+      </section>
+
+      <section id="view-operations-hub" class="studio-view">
+        <header class="project-home-head">
+          <div class="project-home-title">
+            <span class="eyebrow">Operations</span>
+            <h2>Recurring work</h2>
+            <p class="project-home-description">What runs, when it runs, what happened, and what needs a person.</p>
+          </div>
+          <div class="project-home-actions sn-cluster" id="ops-health"></div>
+        </header>
+        <div class="ops-stats" id="ops-stats"></div>
+        <div class="sn-tabs page-tabs" role="tablist" aria-label="Operations sections" id="ops-tabs"></div>
+        <div id="ops-panel" role="tabpanel" tabindex="0" aria-live="polite"></div>
+      </section>
+
+      <section id="view-artifacts" class="studio-view">
+        <div class="view-heading">
+          <div><span class="eyebrow">Project work</span><h2>Everything this project has produced</h2><p>Findings, charts, dashboards, reports, workflows, decisions and tasks, with the data and analysis each one came from.</p></div>
+        </div>
+        <div class="artifact-toolbar">
+          <label class="sn-sr-only" for="artifact-search">Search project work</label>
+          <input id="artifact-search" class="sn-input" type="search" placeholder="Search findings, reports, decisions…" autocomplete="off" aria-label="Search findings, reports, decisions">
+          <div class="sn-tabs" role="tablist" aria-label="Artifact type" id="artifact-tabs"></div>
+          <label class="artifact-archived"><input type="checkbox" id="artifact-archived"> Show archived</label>
+        </div>
+        <div id="artifact-list" class="artifact-list"></div>
+      </section>
+
+      <section id="view-analyst" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Vanessa analyst lab</span><h2>From raw data to a defensible decision</h2><p>Plan the work, review every change, explore evidence, model outcomes, and publish a story—all with an audit trail.</p></div><div class="completion-orb"><strong id="completion-score">0%</strong><span>project ready</span></div></div>
+        <div class="analyst-tabs" role="tablist" aria-label="Analyst Lab tools">
+          <button class="active" data-analyst-tab="copilot">Copilot</button><button data-analyst-tab="prepare">Prepare</button><button data-analyst-tab="explore">Explore</button><button data-analyst-tab="model">Model</button><button data-analyst-tab="story">Story</button><button data-analyst-tab="reproduce">Reproduce</button><button data-analyst-tab="organization">Organization</button>
+        </div>
+
+        <div id="analyst-copilot" class="analyst-panel active">
+          <div class="analyst-grid two">
+            <article class="surface copilot-card"><div class="vanessa-lockup"><span>V</span><div><span class="eyebrow light">Analyst Copilot</span><h3>Tell me the decision you need to make.</h3></div></div><form id="copilot-form" class="form-grid"><textarea id="copilot-goal" rows="4" placeholder="Example: I need to understand why applications declined and what our team should do next." aria-label="Describe the decision you need to make"></textarea><select id="copilot-audience" aria-label="Audience"><option>Executive leadership</option><option>Operations team</option><option>Technical analysts</option><option>Public audience</option></select><select id="copilot-confidence" aria-label="How much autonomy"><option value="careful">Careful—ask before changing anything</option><option value="guided">Guided—prepare fixes for review</option><option value="fast">Fast—build the complete analysis plan</option></select><button class="button white">Build analysis plan</button></form><div id="copilot-response" class="copilot-response" hidden></div></article>
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">One-click packages</span><h3>Start from the decision</h3></div></div><div id="analysis-package-grid" class="package-grid"></div></article>
+          </div>
+          <article class="surface progress-surface"><div class="surface-head"><div><span class="eyebrow">Project completion</span><h3>What is ready—and what still needs work?</h3></div><button id="refresh-completion-btn" class="button ghost">Refresh score</button></div><div id="completion-checklist" class="completion-list"></div></article>
+        </div>
+
+        <div id="analyst-prepare" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Cleaning review queue</span><h3>Approve fixes before they happen</h3></div><button id="scan-cleaning-btn" class="button primary">Find issues</button></div><div id="cleaning-queue" class="review-queue"></div><div class="action-row prepare-actions"><button id="apply-cleaning-btn" class="button primary">Apply selected fixes</button><button id="undo-change-btn" class="button ghost">Undo last change</button></div></article>
+            <article class="surface"><span class="eyebrow">Version comparison</span><h3>What changed between files?</h3><div class="compare-selects"><select id="compare-before"></select><span>→</span><select id="compare-after"></select></div><div class="form-grid"><input id="compare-key" placeholder="Optional stable ID column" aria-label="Optional stable ID column"><button id="compare-btn" class="button primary">Compare versions</button></div><div id="compare-result" class="lab-result empty">Choose two datasets to compare rows, fields, and numeric movement.</div></article>
+          </div>
+          <article class="surface history-surface"><div class="surface-head"><div><span class="eyebrow">Reversible history</span><h3>Every Analyst Lab change</h3></div></div><div id="change-history" class="history-timeline"></div></article>
+        </div>
+
+        <div id="analyst-explore" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><span class="eyebrow">Exploration canvas</span><h3>Build a view from the fields</h3><div id="field-chips" class="field-chips"></div><div class="drop-layout"><label class="field-drop" data-drop-role="category">Category<select id="explore-category"></select></label><label class="field-drop" data-drop-role="value">Value<select id="explore-value"></select></label><label class="field-drop" data-drop-role="filter">Filter<select id="explore-filter"></select></label></div><button id="build-exploration-btn" class="button primary">Build view</button><div id="exploration-result" class="visual-result"></div></article>
+            <article class="surface"><span class="eyebrow">Geographic analysis</span><h3>Where is activity concentrated?</h3><button id="run-geography-btn" class="button primary">Detect locations</button><div id="geography-result" class="visual-result empty">Detects latitude/longitude, state, region, country, ZIP, and city fields.</div></article>
+          </div>
+          <article class="surface"><span class="eyebrow">Text analysis</span><h3>Turn open-ended responses into themes</h3><div class="inline-lab-form"><select id="text-column"></select><button id="run-text-analysis-btn" class="button primary">Analyze text</button></div><div id="text-analysis-result" class="text-insight-grid"></div></article>
+        </div>
+
+        <div id="analyst-model" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><span class="eyebrow">Forecast &amp; scenario lab</span><h3>Project what comes next</h3><div class="form-grid"><select id="forecast-value"></select><select id="forecast-time"></select><input id="forecast-periods" type="number" min="1" max="24" value="6" aria-label="Forecast periods"><label class="range-label">Scenario adjustment <strong id="scenario-label">0%</strong><input id="scenario-adjustment" type="range" min="-50" max="50" value="0"></label><button id="run-forecast-btn" class="button primary">Run forecast</button></div><div id="forecast-result" class="visual-result empty">Choose a measurable field and timeline.</div></article>
+            <article class="surface"><span class="eyebrow">Statistical test assistant</span><h3>Use the right test—and understand it</h3><div class="form-grid"><select id="stats-field-a"></select><select id="stats-field-b"></select><button id="run-stats-btn" class="button primary">Recommend and run test</button></div><div id="stats-result" class="lab-result empty">Vanessa selects correlation, group comparison, or frequency analysis based on the fields.</div></article>
+          </div>
+        </div>
+
+        <div id="analyst-story" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Executive story builder</span><h3>Situation → evidence → action</h3></div><button id="generate-story-btn" class="button primary">Generate story</button></div><div id="story-preview" class="story-preview empty">Generate a decision-ready narrative from the active project.</div></article>
+            <article class="surface"><span class="eyebrow">Presentation coach</span><h3>Walk into the room prepared</h3><button id="coach-presentation-btn" class="button primary">Create speaker notes</button><div id="coach-result" class="coach-list"></div></article>
+          </div>
+          <article class="surface"><div class="surface-head"><div><span class="eyebrow">Interactive report designer</span><h3>Choose the message and presentation</h3></div><div class="action-row"><button id="preview-designed-report-btn" class="button ghost">Preview</button><button id="export-designed-report-btn" class="button primary">Export HTML</button></div></div><div class="report-designer"><div class="designer-controls"><input id="designer-title" placeholder="Report title" aria-label="Report title"><select id="designer-theme"><option value="executive">Executive navy</option><option value="editorial">Editorial cream</option><option value="modern">Modern blue</option></select><label><input type="checkbox" value="summary" checked> Executive summary</label><label><input type="checkbox" value="metrics" checked> Key metrics</label><label><input type="checkbox" value="quality" checked> Data quality</label><label><input type="checkbox" value="story" checked> Analysis story</label><label><input type="checkbox" value="actions" checked> Recommended actions</label></div><div id="designed-report-preview" class="designed-report"></div></div></article>
+        </div>
+
+        <div id="analyst-reproduce" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><span class="eyebrow">SQL workbench</span><h3>Query the active dataset</h3><textarea id="sql-query" class="code-input" rows="6" spellcheck="false">SELECT * FROM data LIMIT 10</textarea><div class="action-row"><button id="write-sql-btn" class="button ghost">Ask Vanessa to write it</button><button id="run-sql-btn" class="button primary">Run query</button></div><div id="sql-result" class="table-shell sql-result"></div></article>
+            <article class="surface"><span class="eyebrow">Reproducible code export</span><h3>Take the analysis with you</h3><div class="code-tabs"><button class="active" data-code-language="python">Python</button><button data-code-language="r">R</button><button data-code-language="sql">SQL</button></div><pre id="code-preview"></pre><button id="download-code-btn" class="button primary">Download code</button></article>
+          </div>
+          <article class="surface"><span class="eyebrow">Synthetic data generator</span><h3>Share the structure without sharing the people</h3><div class="inline-lab-form"><input id="synthetic-rows" type="number" min="10" max="5000" value="100" aria-label="Synthetic row count"><button id="generate-synthetic-btn" class="button primary">Create synthetic dataset</button></div><p class="muted">Produces new fake rows with similar types, ranges, categories, and missingness. Direct identifiers are replaced.</p><div id="synthetic-result" class="lab-result empty">The source dataset remains unchanged.</div></article>
+        </div>
+
+        <div id="analyst-organization" class="analyst-panel">
+          <div class="analyst-grid two">
+            <article class="surface"><span class="eyebrow">Deliverable quality gate</span><h3>Check before you publish</h3><button id="run-deliverable-check-btn" class="button primary">Run final review</button><div id="deliverable-checks" class="completion-list"></div></article>
+            <article class="surface"><span class="eyebrow">Guided learning mode</span><h3>Teach the reason behind each step</h3><div class="setting-row"><div><strong>Learning explanations</strong><span>Show what the step does, why it matters, and common mistakes.</span></div><label class="switch"><input id="learning-mode-toggle" type="checkbox"><span></span></label></div><div id="learning-card" class="learning-card"></div></article>
+          </div>
+          <article class="surface"><span class="eyebrow">Branded organization portal</span><h3>Make Signal Noir feel like your team</h3><div class="branding-grid"><input id="brand-name" placeholder="Organization or department" aria-label="Organization or department"><input id="brand-primary" type="color" value="#00133c" aria-label="Primary brand color"><input id="brand-accent" type="color" value="#0062f1" aria-label="Accent brand color"><input id="brand-analyst-name" placeholder="Assistant name" value="Vanessa" aria-label="Assistant name"><select id="brand-language"><option value="Dataset">Call data “Dataset”</option><option value="Workbook">Call data “Workbook”</option><option value="Evidence set">Call data “Evidence set”</option></select><button id="apply-brand-btn" class="button primary">Apply portal brand</button></div><div id="brand-preview" class="brand-preview"><span id="brand-preview-mark">S</span><div><strong id="brand-preview-name">Signal Noir</strong><small id="brand-preview-tagline">Trusted analytics workspace</small></div></div></article>
+        </div>
+      </section>
+
+      <section id="view-operations" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Analytics operations</span><h2>Turn evidence into accountable work</h2><p>Manage assignments, decisions, requests, governance, meetings, published assets, and live collaboration from one command center.</p></div><div class="ops-health"><strong id="ops-health-score">0</strong><span>health</span></div></div>
+        <div class="ops-tabs" role="tablist" aria-label="Operations tools"><button class="active" data-ops-tab="work">Work</button><button data-ops-tab="collaborate">Collaborate</button><button data-ops-tab="intake">Intake</button><button data-ops-tab="govern">Govern</button><button data-ops-tab="agents">Agents &amp; meetings</button><button data-ops-tab="portal">Portal</button><button data-ops-tab="extensions">Extensions</button></div>
+
+        <div id="ops-work" class="ops-panel active">
+          <div class="ops-grid three"><article class="surface"><div class="surface-head"><div><span class="eyebrow">Action items</span><h3>Who owns the next move?</h3></div><button id="add-task-btn" class="button primary">Add task</button></div><div id="task-board" class="ops-list"></div></article><article class="surface"><div class="surface-head"><div><span class="eyebrow">Decision log</span><h3>What did we decide?</h3></div><button id="add-decision-btn" class="button primary">Record</button></div><div id="decision-list" class="ops-list"></div></article><article class="surface"><div class="surface-head"><div><span class="eyebrow">Data issues</span><h3>What needs investigation?</h3></div><button id="add-issue-btn" class="button primary">Flag issue</button></div><div id="issue-list" class="ops-list"></div></article></div>
+          <div class="ops-grid two ops-row"><article class="surface"><span class="eyebrow">Evidence annotations</span><h3>Comment on the exact thing</h3><div class="form-grid"><select id="annotation-target" aria-label="Annotation target"></select><textarea id="annotation-text" rows="2" placeholder="What should teammates know about this field, metric, chart, or workflow step?" aria-label="Annotation text"></textarea><button id="add-annotation-btn" class="button primary">Add annotation</button></div><div id="annotation-list" class="ops-list"></div></article><article class="surface"><span class="eyebrow">Notification center</span><h3>Mentions, assignments, changes, and alerts</h3><div class="action-row"><button id="mark-notifications-btn" class="button ghost">Mark all read</button><button id="evaluate-alerts-btn" class="button primary">Check alerts</button></div><div id="notification-list" class="ops-list"></div></article></div>
+          <article class="surface ops-row"><span class="eyebrow">Threshold monitoring</span><h3>Create an in-app alert</h3><div class="ops-inline five"><input id="alert-name" placeholder="Alert name" aria-label="Alert name"><select id="alert-field" aria-label="Field to watch"></select><select id="alert-operator" aria-label="Comparison"><option value="gt">Greater than</option><option value="lt">Less than</option><option value="missing">Missing rate above</option><option value="change">Change exceeds %</option></select><input id="alert-value" type="number" placeholder="Threshold" aria-label="Threshold value"><button id="add-alert-btn" class="button primary">Add alert</button></div><div id="alert-list" class="ops-list horizontal"></div></article>
+        </div>
+
+        <div id="ops-collaborate" class="ops-panel">
+          <div class="ops-grid two"><article class="surface"><div class="surface-head"><div><span class="eyebrow">Shared evidence canvas</span><h3>Arrange the working session</h3></div><div class="action-row"><button id="add-canvas-note-btn" class="button ghost">Add note</button><button id="add-canvas-metric-btn" class="button ghost">Add metric</button></div></div><div id="shared-canvas" class="shared-canvas"></div><p class="fine-print">Drag cards to organize them. Updates sync between tabs and through the connected Live Room.</p></article><article class="surface"><span class="eyebrow">People and roles</span><h3>Project access model</h3><div class="ops-inline role-form"><input id="role-name" placeholder="Teammate" aria-label="Teammate"><select id="role-type"><option>Owner</option><option>Analyst</option><option>Reviewer</option><option>Contributor</option><option>Viewer</option></select><button id="add-role-btn" class="button primary">Add</button></div><div id="role-list" class="ops-list"></div><div class="permission-note">Roles document intended access locally. Enforced authentication requires the optional live backend or another identity provider.</div></article></div>
+          <div class="ops-grid two ops-row"><article class="surface"><span class="eyebrow">Secure share</span><h3>Create a password-protected read-only report</h3><div class="form-grid"><input id="share-title" placeholder="Shared report title" aria-label="Shared report title"><input id="share-passphrase" type="password" placeholder="Passphrase (8+ characters)" aria-label="Passphrase (8+ characters)"><button id="create-secure-share-btn" class="button primary">Download encrypted share</button></div><p class="fine-print">Encryption happens in this browser using AES-GCM. Send the HTML file and passphrase separately.</p></article><article class="surface"><span class="eyebrow">Project branching</span><h3>Experiment without disturbing the main analysis</h3><div class="ops-inline"><input id="branch-name" placeholder="Scenario or branch name" aria-label="Scenario or branch name"><button id="create-branch-btn" class="button primary">Create branch</button></div><div id="branch-list" class="ops-list"></div></article></div>
+          <article class="surface ops-row"><span class="eyebrow">Complete audit trail</span><h3>Who changed what—and when?</h3><div id="audit-list" class="audit-table"></div></article>
+        </div>
+
+        <div id="ops-intake" class="ops-panel">
+          <div class="ops-grid two"><article class="surface"><span class="eyebrow">Data request portal</span><h3>Start with a well-framed request</h3><form id="request-form" class="form-grid"><input id="request-title" placeholder="Analysis request" aria-label="Analysis request"><textarea id="request-decision" rows="2" placeholder="What decision will this support?" aria-label="What decision will this support?"></textarea><input id="request-owner" placeholder="Requester / owner" aria-label="Requester / owner"><input id="request-due" type="date"><select id="request-output"><option>Dashboard</option><option>Executive report</option><option>Clean dataset</option><option>Statistical analysis</option><option>Presentation</option></select><button class="button primary">Submit request</button></form><div id="request-list" class="ops-list"></div></article><article class="surface"><span class="eyebrow">Data collection forms</span><h3>Collect structured evidence</h3><div class="form-grid"><input id="form-name" placeholder="Form name" aria-label="Form name"><input id="form-fields" placeholder="Fields separated by commas" aria-label="Fields separated by commas"><button id="create-form-btn" class="button primary">Build form</button></div><div id="form-list" class="ops-list"></div><div id="form-runner" class="form-runner empty">Choose a form to preview and collect a response.</div></article></div>
+          <article class="surface ops-row"><span class="eyebrow">Scheduled delivery</span><h3>Prepare reports automatically when Studio opens</h3><div class="ops-inline six"><input id="delivery-name" placeholder="Delivery name" aria-label="Delivery name"><select id="delivery-format"><option value="html">HTML report</option><option value="json">Project snapshot</option><option value="csv">Active dataset CSV</option></select><select id="delivery-frequency"><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option></select><input id="delivery-date" type="date"><select id="delivery-destination"><option value="download">Export center</option><option value="live">Live room notice</option></select><button id="add-delivery-btn" class="button primary">Schedule</button></div><div id="delivery-list" class="ops-list horizontal"></div><p class="fine-print">Static hosting cannot run while closed. Due deliveries are prepared the next time Studio opens; a server scheduler can be connected later.</p></article>
+        </div>
+
+        <div id="ops-govern" class="ops-panel">
+          <div class="ops-grid two"><article class="surface"><span class="eyebrow">Visual lineage</span><h3>Source → decision</h3><div id="lineage-map" class="lineage-map"></div></article><article class="surface"><span class="eyebrow">Metric ownership</span><h3>Who certifies each KPI?</h3><div id="metric-registry" class="ops-list"></div></article></div>
+          <div class="ops-grid two ops-row"><article class="surface"><span class="eyebrow">Organization knowledge base</span><h3>Definitions, policies, and reporting knowledge</h3><div class="ops-inline"><input id="knowledge-title" placeholder="Knowledge title" aria-label="Knowledge title"><select id="knowledge-type"><option>Definition</option><option>Policy</option><option>Procedure</option><option>Source note</option></select><button id="add-knowledge-btn" class="button primary">Add</button></div><textarea id="knowledge-content" rows="3" placeholder="Approved guidance" aria-label="Approved guidance"></textarea><input id="knowledge-search" placeholder="Search knowledge" aria-label="Search knowledge"><div id="knowledge-list" class="ops-list"></div></article><article class="surface"><span class="eyebrow">Data health center</span><h3>Portfolio readiness</h3><div id="health-center" class="health-grid"></div></article></div>
+        </div>
+
+        <div id="ops-agents" class="ops-panel">
+          <div class="ops-grid two"><article class="surface"><div class="surface-head"><div><span class="eyebrow">Analytics agent council</span><h3>Independent reviews of the project</h3></div><button id="run-agent-council-btn" class="button primary">Run council</button></div><div id="agent-grid" class="agent-grid"></div></article><article class="surface"><span class="eyebrow">Meeting mode</span><h3>Run the decision meeting</h3><div class="form-grid"><input id="meeting-title" placeholder="Meeting title" aria-label="Meeting title"><textarea id="meeting-agenda" rows="2" placeholder="Agenda items, separated by lines" aria-label="Agenda items, separated by lines"></textarea><button id="start-meeting-btn" class="button primary">Start meeting</button></div><div id="meeting-room" class="meeting-room empty">Start a meeting to capture notes, actions, questions, and decisions.</div></article></div>
+          <article class="surface ops-row"><span class="eyebrow">Voice collaboration</span><h3>Dictate notes, tasks, requests, or chat messages</h3><div class="voice-console"><select id="voice-target"><option value="chat">Project chat</option><option value="task">New action item</option><option value="meeting">Meeting notes</option><option value="request">Analysis request</option></select><button id="voice-start-btn" class="voice-button">● Start listening</button><button id="voice-read-btn" class="button ghost">Read project briefing</button><span id="voice-status">Speech recognition availability will be detected in this browser.</span></div></article>
+        </div>
+
+        <div id="ops-portal" class="ops-panel">
+          <div class="ops-grid two"><article class="surface"><span class="eyebrow">Analytics portal</span><h3>Approved dashboards, reports, metrics, and datasets</h3><div class="ops-inline"><select id="portal-asset-type"><option>Report</option><option>Dashboard</option><option>Metric</option><option>Dataset</option></select><input id="portal-asset-title" placeholder="Published asset title" aria-label="Published asset title"><button id="add-portal-asset-btn" class="button primary">Add asset</button></div><div id="portal-assets" class="portal-grid"></div><button id="export-portal-btn" class="button primary">Export internal portal</button></article><article class="surface"><span class="eyebrow">Published experience</span><h3>Preview the organization catalog</h3><div id="portal-preview" class="portal-preview"></div></article></div>
+        </div>
+
+        <div id="ops-extensions" class="ops-panel">
+          <article class="surface"><span class="eyebrow">Connector marketplace</span><h3>Install guided integrations and analysis packs</h3><div class="market-filters"><button class="active" data-market-filter="all">All</button><button data-market-filter="data">Data</button><button data-market-filter="business">Business</button><button data-market-filter="research">Research</button></div><div id="connector-market" class="connector-market"></div></article>
+        </div>
+      </section>
+
+      <section id="view-dashboard" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Interactive canvas</span><h2>Dashboard Studio</h2><p>Build a decision screen from the active dataset. Every widget responds to the same filter.</p></div><div class="action-row"><button id="executive-briefing-btn" class="button ghost">Executive briefing</button><button id="clear-dashboard-btn" class="button ghost">Clear</button></div></div>
+        <div class="dashboard-toolbar surface"><input id="widget-title" placeholder="Widget title" aria-label="Widget title"><select id="widget-type" aria-label="Widget type"><option value="kpi">KPI</option><option value="bar">Bar chart</option><option value="donut">Donut chart</option><option value="table">Data table</option></select><select id="widget-metric" aria-label="Widget measure"></select><select id="widget-category" aria-label="Widget category"></select><button id="add-widget-btn" class="button primary">Add widget</button></div>
+        <div class="dashboard-filterbar"><span>Global filter</span><select id="dashboard-filter-column" aria-label="Filter column"></select><select id="dashboard-filter-value" aria-label="Filter value"></select><button id="clear-dashboard-filter" class="icon-button">Clear</button></div>
+        <div id="dashboard-canvas" class="dashboard-canvas"></div>
+        <article class="surface formula-builder"><div class="surface-head"><div><span class="eyebrow">Visual formula builder</span><h3>Create a calculated field</h3></div></div><div class="formula-row"><input id="formula-name" placeholder="profit" aria-label="Calculated field name"><input id="formula-expression" placeholder="[revenue] - [cost]" aria-label="Calculated field expression"><button id="add-formula-btn" class="button primary">Calculate</button></div><div id="formula-columns" class="formula-columns"></div><p class="fine-print">Use field names in brackets with +, −, ×, ÷, and parentheses. The result is added to the active dataset.</p></article>
+      </section>
+
+      <section id="view-portfolio" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Organization workspace</span><h2>Portfolio Center</h2><p>Find work across projects, govern datasets, reuse proven structures, and protect sensitive information.</p></div><button id="portfolio-search-btn" class="button primary">Search everything</button></div>
+        <div class="portfolio-tabs"><button class="active" data-portfolio-tab="catalog">Data catalog</button><button data-portfolio-tab="privacy">Privacy</button><button data-portfolio-tab="templates">Templates</button><button data-portfolio-tab="reliability">Reliability</button></div>
+        <div id="portfolio-catalog" class="portfolio-panel active"><article class="surface"><div class="surface-head"><div><span class="eyebrow">All projects</span><h3>Organization data catalog</h3></div><input id="catalog-search" placeholder="Filter datasets…" aria-label="Search the catalog"></div><div id="portfolio-summary" class="portfolio-summary"></div><div id="catalog-table" class="catalog-table"></div></article></div>
+        <div id="portfolio-privacy" class="portfolio-panel"><div class="portfolio-grid"><article class="surface"><div class="surface-head"><div><span class="eyebrow">Sensitive data</span><h3>Privacy scanner</h3></div><button id="run-privacy-scan" class="button primary">Scan active data</button></div><div id="portfolio-privacy-findings" class="privacy-findings"></div></article><article class="surface"><span class="eyebrow">Safe sharing</span><h3>Create a redacted copy</h3><select id="redaction-mode"><option value="mask">Mask detected values</option><option value="hash">Replace with stable hashes</option><option value="remove">Remove sensitive fields</option></select><button id="portfolio-redact-dataset-btn" class="button primary full">Create protected dataset</button><p class="fine-print">The original dataset remains unchanged.</p></article></div></div>
+        <div id="portfolio-templates" class="portfolio-panel"><div class="portfolio-grid"><article class="surface"><span class="eyebrow">Reusable work</span><h3>Save this project as a template</h3><input id="template-name" placeholder="Monthly performance review" aria-label="Monthly performance review"><textarea id="template-description" rows="3" placeholder="When should your team use this?" aria-label="When should your team use this?"></textarea><button id="save-template-btn" class="button primary full">Save template</button></article><article class="surface"><div class="surface-head"><div><span class="eyebrow">Template library</span><h3>Start from a proven structure</h3></div></div><div id="template-library" class="template-library"></div></article></div></div>
+        <div id="portfolio-reliability" class="portfolio-panel"><article class="surface"><div class="surface-head"><div><span class="eyebrow">Platform health</span><h3>Reliability Center</h3></div><button id="run-reliability-btn" class="button primary">Run checks</button></div><div id="reliability-score" class="reliability-score"></div><div id="reliability-checks" class="reliability-checks"></div></article></div>
+      </section>
+
+      <section id="view-data" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Multi-file workspace</span><h2>Data catalog</h2><p>Drop files together. Studio profiles their schemas and suggests relationships.</p></div><div class="action-row"><label class="button ghost file-button">Choose folder<input id="studio-folder-input" type="file" webkitdirectory multiple hidden></label><button id="sample-project-btn" class="button ghost">Load sample project</button></div></div>
+        <article class="source-guide-card">
+          <div class="source-guide-avatar">V</div>
+          <div class="source-guide-copy"><span class="eyebrow light">Vanessa’s connection guide</span><h3>Where does your data live?</h3><p>Choose a source—or describe it in your own words—and I’ll explain exactly how to prepare it, what permissions you need, what stays private, and how to connect it.</p><div id="source-guide-options" class="source-guide-options"></div><form id="source-question-form" class="source-question-form"><input id="source-question" placeholder="Example: Our data is in a private SQL Server database" aria-label="What do you want from this data?"><button type="submit">Show me how</button></form></div>
+        </article>
+        <label class="drop-zone" id="studio-drop-zone">
+          <input id="studio-file-input" type="file" multiple accept=".csv,.tsv,.txt,.json,.xlsx,.xls,.xlsm,.zip" hidden>
+          <strong>Drop files or a folder export here</strong>
+          <span>CSV, Excel, JSON, and delimited text · multiple files supported</span>
+        </label>
+        <div id="relationship-suggestions" class="suggestion-strip" hidden></div>
+        <div id="dataset-list" class="dataset-grid"></div>
+        <article class="surface connector-panel">
+          <div class="surface-head"><div><span class="eyebrow">Live connections</span><h3>Connect a public data source</h3></div></div>
+          <div class="inline-form"><select id="connector-type" aria-label="Connector type"><option value="google">Public Google Sheet</option><option value="http">CSV or JSON URL</option><option value="database">Database gateway</option></select><input id="connector-url" type="url" placeholder="Paste a public link" aria-label="Connector URL"><button id="connect-btn" class="button primary">Connect</button></div>
+          <p id="connector-note" class="fine-print">Connections refresh when this project opens. Private databases require an HTTPS gateway because GitHub Pages cannot open database sockets.</p>
+          <div class="connection-actions"><button id="diagnose-connection-btn" class="button ghost">Diagnose connection</button><div id="connection-diagnosis" class="connection-diagnosis" hidden></div></div>
+        </article>
+        <article id="change-briefing-panel" class="surface change-briefing-panel" hidden><div class="surface-head"><div><span class="eyebrow">What changed?</span><h3>Dataset update briefing</h3></div><button id="dismiss-change-briefing" class="icon-button">Dismiss</button></div><div id="change-briefing-content"></div></article>
+      </section>
+
+      <section id="view-workflow" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Repeatable recipes</span><h2>Workflow canvas</h2><p>Arrange steps, preview the recipe, and rerun it on replacement files.</p></div><div class="action-row"><button id="undo-step-btn" class="button ghost">Undo</button><button id="run-workflow-btn" class="button primary">Run workflow</button></div></div>
+        <div class="workflow-layout">
+          <aside class="step-library surface"><h3>Add a step</h3><div id="step-library"></div><button id="natural-step-btn" class="button ghost full">Describe a transformation</button></aside>
+          <div class="workflow-canvas"><div class="workflow-source"><span>Source</span><strong id="workflow-source-name">Choose a dataset</strong></div><div id="workflow-nodes"></div><div class="workflow-output"><span>Output</span><strong id="workflow-output-summary">Ready to run</strong></div></div>
+          <aside class="surface inspector"><h3>Run history</h3><div id="run-history" class="activity-list"></div></aside>
+        </div>
+      </section>
+
+      <section id="view-dictionary" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Automatic catalog</span><h2>Data dictionary</h2><p>Types, completeness, uniqueness, examples, and likely meanings for every field.</p></div><button id="download-dictionary-btn" class="button ghost">Download dictionary</button></div>
+        <div class="surface table-shell"><table><thead><tr><th>Column</th><th>Type</th><th>Complete</th><th>Unique</th><th>Example</th><th>Role</th></tr></thead><tbody id="dictionary-body"></tbody></table></div>
+      </section>
+
+      <section id="view-quality" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Monitoring</span><h2>Data quality rules</h2><p>Turn expectations into repeatable checks for every new version of a file.</p></div><button id="run-quality-btn" class="button primary">Run checks</button></div>
+        <div class="quality-layout">
+          <article class="surface"><h3>Add a rule</h3><div class="form-grid"><select id="rule-column" aria-label="Rule column"></select><select id="rule-type" aria-label="Rule type"><option value="required">Cannot be blank</option><option value="unique">Must be unique</option><option value="nonnegative">Cannot be negative</option><option value="allowed">Must use approved values</option><option value="future">Cannot be a future date</option></select><input id="rule-value" placeholder="Approved values, separated by commas" aria-label="Rule value"><button id="add-rule-btn" class="button primary">Add rule</button></div><div id="quality-rules" class="rule-list"></div></article>
+          <article class="surface score-card"><span class="eyebrow">Current grade</span><div id="quality-score" class="quality-score">—</div><p id="quality-summary">Run the checks to grade this dataset.</p><div id="quality-results" class="quality-results"></div></article>
+        </div>
+      </section>
+
+      <section id="view-intelligence" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Data intelligence</span><h2>Understand, trust, and govern</h2><p>Map your data, define its meaning, ask questions, protect sensitive fields, and prepare it for production.</p></div><span id="intel-project-status" class="approval-pill">Draft</span></div>
+        <div class="intel-tabs" role="tablist" aria-label="Intelligence tools">
+          <button class="active" data-intel-tab="structure">Structure</button>
+          <button data-intel-tab="semantics">Meaning</button>
+          <button data-intel-tab="ask">Ask &amp; monitor</button>
+          <button data-intel-tab="privacy">Privacy</button>
+          <button data-intel-tab="governance">Governance</button>
+          <button data-intel-tab="deploy">Deploy</button>
+        </div>
+
+        <div id="intel-structure" class="intel-panel active">
+          <div class="intel-grid two">
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Column mapping</span><h3>What does each field mean?</h3></div><button id="infer-mappings-btn" class="button ghost">Suggest roles</button></div><p class="muted">Assign business roles so downstream tools know which fields are IDs, dates, measures, categories, or sensitive data.</p><div class="table-shell compact-table"><table><thead><tr><th>Column</th><th>Detected type</th><th>Business role</th></tr></thead><tbody id="mapping-body"></tbody></table></div></article>
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Join assistant</span><h3>Combine related files</h3></div></div><div class="join-builder"><select id="join-left" aria-label="Left dataset"></select><select id="join-left-key" aria-label="Left key column"></select><span>＋</span><select id="join-right" aria-label="Right dataset"></select><select id="join-right-key" aria-label="Right key column"></select></div><div class="action-row"><button id="analyze-join-btn" class="button ghost">Analyze join</button><button id="create-join-btn" class="button primary">Create joined dataset</button></div><div id="join-analysis" class="intel-result empty">Choose two datasets to inspect match rate and duplication risk.</div></article>
+          </div>
+        </div>
+
+        <div id="intel-semantics" class="intel-panel">
+          <div class="intel-grid three">
+            <article class="surface"><span class="eyebrow">Business glossary</span><h3>Shared language</h3><form id="glossary-form" class="form-grid"><input id="glossary-term" placeholder="Term, e.g. Active customer" aria-label="Term, e.g. Active customer"><textarea id="glossary-definition" rows="3" placeholder="Definition and inclusion rules" aria-label="Definition and inclusion rules"></textarea><button class="button primary">Add definition</button></form><div id="glossary-list" class="intel-list"></div></article>
+            <article class="surface"><span class="eyebrow">Metric builder</span><h3>Reusable calculations</h3><form id="metric-form" class="form-grid"><input id="metric-name" placeholder="Metric name" aria-label="Metric name"><input id="metric-formula" placeholder="SUM(revenue) / COUNTD(customer_id)" aria-label="SUM(revenue) / COUNTD(customer_id)"><button class="button primary">Create metric</button></form><p class="fine-print">Supports SUM, AVG, MIN, MAX, COUNT, and COUNTD.</p><div id="metric-list" class="intel-list"></div></article>
+            <article class="surface"><span class="eyebrow">Data contract</span><h3>Lock in expectations</h3><p class="muted">Capture the current schema, required fields, and unique identifiers; then validate future versions.</p><div class="stack contract-actions"><button id="generate-contract-btn" class="button primary">Generate contract</button><button id="validate-contract-btn" class="button ghost">Validate dataset</button><button id="download-contract-btn" class="button ghost">Download JSON</button></div><div id="contract-result" class="intel-result empty">No contract yet.</div></article>
+          </div>
+        </div>
+
+        <div id="intel-ask" class="intel-panel">
+          <div class="intel-grid two">
+            <article class="surface ask-card"><span class="eyebrow">Ask your data</span><h3>Get an answer with receipts</h3><form id="data-question-form" class="question-form"><input id="data-question" placeholder="What is the average revenue? Which region has the highest sales?" aria-label="What is the average revenue? Which region has the highest sales?"><button class="button primary">Answer</button></form><div id="data-answer" class="intel-result empty">Answers include the calculation, source, and row count.</div></article>
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Anomaly inbox</span><h3>What needs attention?</h3></div><button id="scan-anomalies-btn" class="button ghost">Scan now</button></div><div id="anomaly-list" class="intel-list"></div></article>
+          </div>
+          <article class="surface dashboard-question"><span class="eyebrow">Dashboard question mode</span><h3>Describe the decision—not the chart</h3><form id="dashboard-question-form" class="question-form"><input id="dashboard-question" placeholder="Help leadership understand monthly enrollment and which programs are falling behind" aria-label="Help leadership understand monthly enrollment and which programs are falling behind"><button class="button primary">Design dashboard</button></form><div id="dashboard-plan" class="dashboard-plan"></div></article>
+        </div>
+
+        <div id="intel-privacy" class="intel-panel">
+          <div class="intel-grid two">
+            <article class="surface"><div class="surface-head"><div><span class="eyebrow">Sensitive data scanner</span><h3>Find privacy risk</h3></div><button id="scan-privacy-btn" class="button primary">Scan dataset</button></div><p class="muted">Checks names and sample values for identifiers, contact details, financial, health, and demographic fields.</p><div id="privacy-findings" class="intel-list"></div></article>
+            <article class="surface"><span class="eyebrow">Automatic redaction</span><h3>Create a safe working copy</h3><p class="muted">Mask direct identifiers while preserving consistent pseudonyms for joins and repeat analysis.</p><div class="redaction-options"><label><input type="checkbox" value="email" checked> Emails</label><label><input type="checkbox" value="phone" checked> Phones</label><label><input type="checkbox" value="name" checked> Names</label><label><input type="checkbox" value="identifier" checked> IDs &amp; accounts</label><label><input type="checkbox" value="address" checked> Addresses</label><label><input type="checkbox" value="sensitive" checked> Health &amp; demographics</label></div><button id="redact-dataset-btn" class="button primary">Create redacted copy</button><div id="redaction-result" class="intel-result empty">The original dataset is never changed.</div></article>
+          </div>
+        </div>
+
+        <div id="intel-governance" class="intel-panel">
+          <div class="intel-grid two">
+            <article class="surface"><span class="eyebrow">Approval workflow</span><h3>Draft → Reviewed → Approved → Published</h3><div id="approval-track" class="approval-track"></div><div class="form-grid"><input id="approval-reviewer" placeholder="Reviewer name" aria-label="Reviewer name"><textarea id="approval-comment" rows="2" placeholder="Review note or decision" aria-label="Review note or decision"></textarea><button id="advance-approval-btn" class="button primary">Advance status</button></div><div id="approval-log" class="intel-list"></div></article>
+            <article class="surface"><span class="eyebrow">Change impact</span><h3>See what a change could affect</h3><select id="impact-target" class="wide-select"></select><div id="impact-result" class="intel-result empty">Choose a field, metric, or term to trace its downstream use.</div></article>
+          </div>
+          <article class="surface template-market"><div class="surface-head"><div><span class="eyebrow">Template marketplace</span><h3>Start with a proven operating model</h3></div></div><div id="template-grid" class="template-grid"></div></article>
+        </div>
+
+        <div id="intel-deploy" class="intel-panel">
+          <div class="intel-grid two">
+            <article class="surface"><span class="eyebrow">Connector setup generator</span><h3>Build a secure database gateway starter</h3><div class="form-grid"><select id="gateway-database"><option>PostgreSQL</option><option>SQL Server</option><option>MySQL</option><option>Snowflake</option></select><select id="gateway-language"><option value="node">Node.js + Express</option><option value="python">Python + FastAPI</option></select><input id="gateway-table" placeholder="Approved view or table name" aria-label="Approved view or table name"><button id="generate-gateway-btn" class="button primary">Download starter kit</button></div><p class="fine-print">Generated kits use read-only credentials from environment variables. No secrets are placed in this website.</p></article>
+            <article class="surface"><span class="eyebrow">Organization readiness</span><h3>Is this ready to scale?</h3><div id="readiness-questions" class="readiness-questions"></div><button id="score-readiness-btn" class="button primary">Score readiness</button><div id="readiness-result" class="intel-result empty">Rate six foundations to get a score and next-step roadmap.</div></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-report" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Executive output</span><h2>Report Studio</h2><p>Turn the current project into a concise narrative with evidence and recommendations.</p></div><div class="action-row"><button id="generate-report-btn" class="button primary">Generate report</button><button id="present-report-btn" class="button ghost">Present</button><button id="download-pptx-btn" class="button ghost">PowerPoint</button><button id="download-report-btn" class="button ghost">HTML</button></div></div>
+        <article id="evidence-explorer" class="surface evidence-explorer"><div class="surface-head"><div><span class="eyebrow">Traceable findings</span><h3>Click any insight to inspect the evidence</h3></div><button id="refresh-evidence-btn" class="button ghost">Refresh findings</button></div><div id="evidence-findings" class="evidence-findings"></div></article>
+        <article id="report-canvas" class="report-canvas"></article>
+      </section>
+
+      <section id="view-automate" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Connections and cadence</span><h2>Automation</h2><p>Plan recurring work locally or export a calendar reminder. Server execution can be connected later.</p></div></div>
+        <div class="automation-grid">
+          <article class="surface"><h3>Schedule a report</h3><div class="form-grid"><input id="schedule-name" placeholder="Monday performance report" aria-label="Schedule name"><select id="schedule-frequency" aria-label="Schedule frequency"><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option></select><input id="schedule-date" type="date" aria-label="First run date"><button id="add-schedule-btn" class="button primary">Add schedule</button></div><div id="schedule-list" class="rule-list"></div></article>
+          <article class="surface"><h3>Collaboration</h3><p class="muted">Track roles, comments, and project snapshots locally, then share them in a portable project bundle.</p><div class="inline-form" style="grid-template-columns:1fr 120px auto;margin-top:14px"><input id="member-name" placeholder="Teammate name" aria-label="Teammate name"><select id="member-role" aria-label="Teammate role"><option>Viewer</option><option>Editor</option><option>Owner</option></select><button id="add-member-btn" class="button ghost">Add</button></div><div class="inline-form" style="grid-template-columns:1fr auto;margin-top:9px"><input id="comment-text" placeholder="Add a project comment" aria-label="Comment"><button id="add-comment-btn" class="button ghost">Comment</button></div><div id="collaboration-list" class="rule-list"></div><div class="stack" style="margin-top:14px"><button id="snapshot-btn" class="button ghost">Save version snapshot</button><button id="share-project-btn" class="button primary">Create collaboration bundle</button><label class="button ghost file-button">Import bundle<input id="import-project-input" type="file" accept=".json" hidden></label><button id="calendar-btn" class="button ghost">Export schedules to calendar</button></div></article>
+          <article class="surface"><h3>AI engine</h3><div class="setting-row"><div><strong>Browser AI</strong><span>Use a local browser model when supported.</span></div><label class="switch"><input id="local-ai-toggle" type="checkbox"><span></span></label></div><div class="setting-row"><div><strong>Private fallback</strong><span>Keep deterministic recommendations when no model is available.</span></div><span class="badge good">Always on</span></div><p id="ai-detail" class="fine-print"></p></article>
+        </div>
+      </section>
+
+      <section id="view-builder" class="studio-view">
+        <div class="view-heading"><div><span class="eyebrow">Personal toolbox</span><h2>Tool Builder</h2><p>Package a workflow into a reusable tool without writing code.</p></div></div>
+        <div class="builder-layout">
+          <article class="surface"><div class="form-grid"><input id="custom-tool-name" placeholder="Tool name" aria-label="Tool name"><textarea id="custom-tool-purpose" rows="3" placeholder="What should this tool accomplish?" aria-label="Tool purpose"></textarea><button id="build-tool-btn" class="button primary">Build tool</button></div></article>
+          <div id="custom-tool-list" class="dataset-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="studio-context" id="studio-context" aria-label="Project context">
+      <section class="ctx-section" aria-labelledby="ctx-data-title"><div class="ctx-head"><h2 id="ctx-data-title">Data sources</h2><button type="button" class="sn-btn sn-btn-ghost sn-btn-sm" data-ctx-add>Add</button></div><div id="ctx-data"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-focus-title"><div class="ctx-head"><h2 id="ctx-focus-title">Vanessa’s focus</h2></div><div id="ctx-focus"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-memory-title"><div class="ctx-head"><h2 id="ctx-memory-title">Project memory</h2></div><div id="ctx-memory"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-workflow-title"><div class="ctx-head"><h2 id="ctx-workflow-title">Current workflow</h2></div><div id="ctx-workflow"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-evidence-title"><div class="ctx-head"><h2 id="ctx-evidence-title">Evidence</h2></div><div id="ctx-evidence"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-outputs-title"><div class="ctx-head"><h2 id="ctx-outputs-title">Outputs</h2><button type="button" class="sn-btn sn-btn-ghost sn-btn-sm" data-ctx-outputs>View all</button></div><div id="ctx-outputs"></div></section>
+      <section class="ctx-section" aria-labelledby="ctx-activity-title"><div class="ctx-head"><h2 id="ctx-activity-title">Activity</h2></div><div id="ctx-activity"></div></section>
+    </aside>
+  </div>
+  <div class="studio-scrim" id="studio-scrim" hidden></div>
+
+  <div id="studio-dialog" class="dialog-shell" hidden><div class="dialog-card"><button class="dialog-close" aria-label="Close">×</button><div id="dialog-content"></div></div></div>
+  <div id="studio-toast" class="studio-toast" hidden></div>
+
+  <div id="command-palette" class="command-palette" hidden>
+    <div class="command-card" role="dialog" aria-modal="true" aria-labelledby="command-title">
+      <div class="command-search"><span>⌕</span><input id="command-input" autocomplete="off" placeholder="Search tools and actions…" aria-label="Search Studio"><kbd>Esc</kbd></div>
+      <div class="command-meta"><strong id="command-title">Go anywhere</strong><span>↑↓ move · Enter open</span></div>
+      <div id="command-results" class="command-results" role="listbox"></div>
+    </div>
+  </div>
+
+  <aside id="onboarding-panel" class="onboarding-panel" aria-label="Getting started" aria-hidden="true">
+    <button id="close-onboarding-btn" class="onboarding-close" aria-label="Close guide">×</button>
+    <span class="eyebrow light">Your first project</span><h2>Four steps to a useful answer</h2>
+    <p>Studio can stay simple. Follow this path, then reveal specialist tools only when you need them.</p>
+    <div id="onboarding-steps" class="onboarding-steps"></div>
+    <button id="finish-onboarding-btn" class="button white">Got it</button>
+  </aside>
+  <div id="onboarding-scrim" class="onboarding-scrim" hidden></div>
+
+
+  <div id="import-preview" class="import-preview" hidden><div class="import-preview-card" role="dialog" aria-modal="true" aria-labelledby="import-preview-title"><header><div><span class="eyebrow">Import review</span><h2 id="import-preview-title">Check the data before adding it</h2></div><button id="close-import-preview" aria-label="Close">×</button></header><div id="import-preview-body"></div><footer><button id="cancel-import-btn" class="button ghost">Cancel</button><button id="confirm-import-btn" class="button primary">Add selected data</button></footer></div></div>
+
+  <div id="presentation-mode" class="presentation-mode" hidden><header><span id="presentation-progress">1 / 1</span><div class="presentation-controls"><button id="presentation-notes-btn">Notes</button><button id="presentation-fullscreen-btn">Fullscreen</button><button id="close-presentation-btn">×</button></div></header><main id="presentation-slide"></main><aside id="presentation-notes" hidden></aside><footer><button id="presentation-prev-btn">←</button><div id="presentation-dots"></div><button id="presentation-next-btn">→</button></footer></div>
+
+  <aside id="chat-drawer" class="chat-drawer" aria-label="Project chat" aria-hidden="true">
+    <header class="chat-header"><div><span class="eyebrow light">Team collaboration</span><h2>Project chat</h2></div><button id="close-chat-btn" aria-label="Close chat">×</button></header>
+    <div class="chat-presence"><div id="chat-presence-list" class="presence-list"></div><span id="chat-connection-label">Local project room</span><button id="chat-settings-btn">Connect live</button></div>
+    <section id="chat-settings" class="chat-settings" hidden>
+      <div class="chat-settings-head"><strong>Live team room</strong><button id="chat-settings-close">Done</button></div>
+      <p>Connect the same Supabase project and room on each device. Messages use Realtime Broadcast and remain saved locally in each participant’s Signal Noir project.</p>
+      <details class="chat-setup-guide"><summary>Show the 3-step setup</summary><ol><li>Create or open a Supabase project.</li><li>In Project Settings → API, copy the Project URL and publishable/anon key.</li><li>Every teammate enters those values and the exact same room name here.</li></ol></details>
+      <input id="chat-display-name" placeholder="Your display name" aria-label="Your display name">
+      <input id="chat-supabase-url" type="url" placeholder="Supabase project URL" aria-label="Supabase project URL">
+      <input id="chat-supabase-key" type="password" placeholder="Supabase anon/publishable key" aria-label="Supabase anon/publishable key">
+      <input id="chat-room-name" placeholder="Team room name" aria-label="Team room name">
+      <div class="chat-setting-actions"><button id="connect-chat-btn" class="button primary">Connect room</button><button id="disconnect-chat-btn" class="button ghost">Use local mode</button></div>
+      <div class="chat-privacy-note"><strong>Room access:</strong> anyone with the project URL, publishable key, and exact room name can join. Do not post confidential data until your Supabase project has appropriate access controls.</div>
+    </section>
+    <nav id="chat-channels" class="chat-channels" aria-label="Chat channels"></nav>
+    <div class="chat-tools"><input id="chat-search" placeholder="Search messages" aria-label="Search messages"><button id="chat-invite-btn" title="Copy room details">Invite</button></div>
+    <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+    <div id="chat-typing" class="chat-typing"></div>
+    <div id="chat-reply-preview" class="chat-reply-preview" hidden></div>
+    <form id="chat-form" class="chat-composer">
+      <textarea id="chat-message" rows="2" placeholder="Message the project team…" aria-label="Message the project team"></textarea>
+      <div class="chat-compose-row"><select id="chat-reference" aria-label="Attach project reference"><option value="">Attach project context…</option></select><button type="submit" class="button primary">Send</button></div>
+    </form>
+  </aside>
+  <div id="chat-scrim" class="chat-scrim" hidden></div>
+
+  <script src="../shared/resilience.js"></script>
+  <script src="../shared/access.js"></script>
+  <script src="../shared/access-ui.js"></script>
+  <script src="../shared/artifacts.js"></script>
+  <script src="../shared/project-service.js"></script>
+  <script src="../shared/operations.js"></script>
+  <script src="../shared/connected.js"></script>
+  <script src="../shared/parse.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="studio.js"></script>
+  <script src="intelligence.js"></script>
+  <script src="analyst.js"></script>
+  <script src="collaboration.js"></script>
+  <script src="operations.js"></script>
+  <script src="experience.js"></script>
+  <script src="evidence.js"></script>
+  <script src="pulse.js"></script>
+  <script src="command-center.js"></script>
+  <script src="portfolio.js"></script>
+  <script src="../shared/catalog.js"></script>
+  <script src="../shared/workflow-ui.js"></script>
+  <script src="../shared/viz.js"></script>
+  <script src="../shared/evidence-ui.js"></script>
+  <script src="../shared/analysis-engine.js"></script>
+  <script src="demo-project.js"></script>
+  <script src="../shared/stats.js"></script>
+  <script src="../shared/vanessa-providers.js"></script>
+  <script src="vanessa/context.js"></script>
+  <script src="vanessa/findings.js"></script>
+  <script src="vanessa/registry.js"></script>
+  <script src="vanessa/tools-prepare.js"></script>
+  <script src="vanessa/tools-analyze.js"></script>
+  <script src="vanessa/tools-build.js"></script>
+  <script src="vanessa/router.js"></script>
+  <script src="vanessa/planner.js"></script>
+  <script src="vanessa/executor.js"></script>
+  <script src="vanessa/cards.js"></script>
+  <script src="vanessa/workspace.js"></script>
+  <script src="project-home.js"></script>
+  <script src="ops-view.js"></script>
+  <script src="studio-shell.js"></script>
+  <script src="../shared/platform.js"></script>
+</body>
+</html>
