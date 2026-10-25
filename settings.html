@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <title>Settings · Signal Noir</title>
+  <link rel="icon" href="signal-noir-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script src="tools/shared/theme.js"></script>
+  <link rel="stylesheet" href="tools/shared/design-system.css">
+  <link rel="stylesheet" href="site/site.css">
+</head>
+<body class="sn-app">
+  <main id="main" class="sn-container">
+    <header class="sn-page-head">
+      <span class="sn-eyebrow"><i></i>Settings</span>
+      <h1 class="sn-h1">Preferences &amp; privacy</h1>
+      <p class="sn-lead">Everything here applies to this browser only. There is no account, so there is nothing to sign in to.</p>
+    </header>
+    <div class="settings-layout">
+      <nav class="settings-nav" aria-label="Settings sections"><a href="#appearance">Appearance</a><a href="#workspace">Workspace</a><a href="#vanessa">Vanessa</a><a href="#privacy">Privacy &amp; storage</a><a href="#access">Your access</a><a href="#app">App</a></nav>
+      <div>
+        <section class="settings-section" id="appearance" aria-labelledby="appearance-title">
+          <h2 id="appearance-title">Appearance</h2><p class="sn-body">Signal Noir is designed dark-first. Both themes use the same tokens.</p>
+          <div class="setting-row"><span><strong>Theme</strong><small>Applies to every page and tool.</small></span><div class="segmented" role="group" aria-label="Theme" id="theme-choice"><button type="button" data-theme-value="dark">Dark</button><button type="button" data-theme-value="light">Light</button></div></div>
+          <div class="setting-row"><span><strong>Reduce motion</strong><small>Turns off page transitions and reveal animations. Your system setting is always respected too.</small></span><div class="segmented" role="group" aria-label="Motion" id="motion-choice"><button type="button" data-motion-value="full">Full</button><button type="button" data-motion-value="reduced">Reduced</button></div></div>
+          <div class="setting-row"><span><strong>Explanations on tools</strong><small>Show plain-English definitions of statistical terms inside the tools.</small></span><div class="segmented" role="group" aria-label="Definitions" id="definitions-choice"><button type="button" data-definitions-value="on">On</button><button type="button" data-definitions-value="off">Off</button></div></div>
+        </section>
+
+        <section class="settings-section" id="workspace" aria-labelledby="workspace-title">
+          <h2 id="workspace-title">Workspace</h2><p class="sn-body">Progressive disclosure: start simple, reveal specialist tools when you need them.</p>
+          <div class="setting-row"><span><strong>Studio tools shown</strong><small>Essentials keeps Vanessa, data, analysis and outputs in view. Everything shows all fourteen Studio sections.</small></span><div class="segmented" role="group" aria-label="Studio tools shown" id="mode-choice"><button type="button" data-mode-value="guided">Essentials</button><button type="button" data-mode-value="standard">Standard</button><button type="button" data-mode-value="expert">Everything</button></div></div>
+          <div class="setting-row"><span><strong>Show the welcome guide again</strong><small>Brings back the three-idea introduction on the home page.</small></span><button type="button" class="sn-btn sn-btn-sm" id="reset-onboarding">Reset</button></div>
+        </section>
+
+        <section class="settings-section" id="vanessa" aria-labelledby="vanessa-title">
+          <h2 id="vanessa-title">Vanessa</h2>
+          <p class="sn-body">Every number Vanessa reports is calculated by Signal Noir’s own engine on this device. A language model is optional: it only helps route unclear requests and write clearly labeled interpretations, and it receives column names, types and calculated results — never your rows.</p>
+          <div id="provider-restricted" class="sn-callout sn-callout-info" hidden><span aria-hidden="true">◍</span><span>Your access profile doesn’t include letting Vanessa use a language model, so she reasons with the deterministic rules engine only. Every number she reports is calculated either way.</span></div>
+          <div id="provider-list" class="sn-stack" style="--sn-stack-gap:8px;margin-bottom:8px"></div>
+          <div class="setting-row"><span><strong>Debug logging</strong><small>Logs routing decisions, plans and tool timings to the browser console. Dataset contents are never logged.</small></span><div class="segmented" role="group" aria-label="Debug logging" id="debug-choice"><button type="button" data-debug-value="off">Off</button><button type="button" data-debug-value="on">On</button></div></div>
+          <div class="setting-row"><span><strong>Vanessa’s memory</strong><small id="memory-summary">Notes Vanessa remembers between visits on tool pages.</small></span><button type="button" class="sn-btn sn-btn-sm sn-btn-danger" id="clear-memory">Forget everything</button></div>
+        </section>
+
+        <section class="settings-section" id="privacy" aria-labelledby="privacy-title">
+          <h2 id="privacy-title">Privacy &amp; storage</h2>
+          <p class="sn-body">Every project is in <strong>Local</strong> mode: nothing leaves this device. Private Cloud and Team modes are planned and not available yet.</p>
+          <div class="kpis" style="margin:20px 0 8px" id="storage-kpis"></div>
+          <div class="setting-row"><span><strong>Export all projects</strong><small>Download a JSON bundle of every Studio project, including data, to move to another browser or keep as a backup.</small></span><button type="button" class="sn-btn sn-btn-sm" id="export-all">Download bundle</button></div>
+          <div class="setting-row"><span><strong>Shared workspace file</strong><small id="workspace-file">Checking…</small></span><button type="button" class="sn-btn sn-btn-sm" id="clear-workspace">Clear</button></div>
+          <div class="setting-row"><span><strong>Demo project</strong><small id="demo-status">The sample-data project used to demonstrate Vanessa.</small></span><button type="button" class="sn-btn sn-btn-sm" id="reset-demo">Reset demo</button></div>
+          <div class="setting-row"><span><strong>Recently used and favorite tools</strong><small>Remembered to make the tool library faster to use.</small></span><button type="button" class="sn-btn sn-btn-sm" id="clear-prefs">Clear</button></div>
+        </section>
+
+        <section class="settings-section" id="access" aria-labelledby="access-title">
+          <h2 id="access-title">Your access</h2>
+          <p class="sn-body">Signal Noir is free and nothing is locked behind payment. When several people share an install, an organization can group them into teams and give each team an access profile, so each person sees the part of Signal Noir relevant to their job.</p>
+          <div id="access-status"></div>
+          <div class="setting-row"><span><strong>Workspace</strong><small id="workspace-detail">Checking…</small></span><button type="button" class="sn-btn sn-btn-sm" id="switch-workspace">Switch</button></div>
+          <div class="setting-row"><span><strong>Manage teams and access profiles</strong><small>Create teams, decide which capabilities each access profile includes, and control which projects a team can reach.</small></span><a class="sn-btn sn-btn-sm" href="organization.html">Open Organization</a></div>
+          <div class="setting-row"><span><strong>Sample organization</strong><small id="demo-org-status">A clearly labelled example with five teams, so you can see how the interface adapts.</small></span><button type="button" class="sn-btn sn-btn-sm" id="demo-org-btn">Add sample</button></div>
+          <div class="setting-row"><span><strong>Reset all access settings</strong><small>Removes every organization, team, member and access profile from this browser. Your projects and data are untouched.</small></span><button type="button" class="sn-btn sn-btn-sm sn-btn-danger" id="reset-access">Reset</button></div>
+          <div class="sn-callout sn-callout-warning" style="margin-top:20px"><span aria-hidden="true">⚠</span><span>Access shapes the interface; it is not enforced security. Signal Noir runs entirely in this browser, so anyone technical can bypass these checks. Real enforcement needs a server, which Signal Noir does not have yet.</span></div>
+        </section>
+
+        <section class="settings-section" id="app" aria-labelledby="app-title">
+          <h2 id="app-title">App</h2>
+          <div class="setting-row"><span><strong>Install Signal Noir</strong><small id="install-status">Add Signal Noir to your apps. Visited pages keep working offline.</small></span><button type="button" class="sn-btn sn-btn-sm" id="install-app">Install</button></div>
+          <div class="setting-row"><span><strong>Getting started guide</strong><small>A two-minute tour of how Signal Noir fits together.</small></span><a class="sn-btn sn-btn-sm" href="getting-started.html">Open guide</a></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="tools/shared/catalog.js"></script>
+  <script src="tools/shared/projects-store.js"></script>
+  <script src="tools/shared/vanessa-providers.js"></script>
+  <script src="tools/shared/resilience.js"></script>
+  <script src="tools/shared/access.js"></script>
+  <script src="tools/shared/access-ui.js"></script>
+  <script src="tools/shared/artifacts.js"></script>
+  <script src="tools/shared/project-service.js"></script>
+  <script src="tools/shared/operations.js"></script>
+  <script src="tools/shared/platform.js"></script>
+  <script src="site/site-ui.js"></script>
+  <script src="site/settings.js"></script>
+</body>
+</html>

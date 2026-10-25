@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Builder — Signal Noir</title>
+    <link rel="stylesheet" href="../../tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        h1, h2 { font-family: 'Lora', Georgia, serif; }
+        .field { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; font-size: 0.8125rem; padding: 0.4rem 0.55rem; color: #0f172a; width: 100%; }
+        .field:focus { outline: none; border-color: #0062F1; box-shadow: 0 0 0 2px rgba(0,98,241,0.15); }
+        .field-label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.2rem; }
+    </style>
+    <script src="../shared/theme.js"></script>
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <link rel="stylesheet" href="../shared/design-system.css">
+    <link rel="stylesheet" href="../shared/platform.css">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h2 class="text-lg font-semibold text-[#00133C]">Dashboard Builder</h2>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Build and download</div>
+    </header>
+
+    <main class="max-w-[1500px] mx-auto p-6">
+        <div class="mb-5">
+            <div class="flex items-baseline gap-3">
+                <p class="text-sm text-slate-600 max-w-3xl">
+                    Build a dashboard by picking the visuals, saying what each one measures, and adding
+                    slicers people can filter with. Download it as a single HTML file, or send the link.
+                </p>
+                <button onclick="toggleHelp()" id="help-toggle" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium whitespace-nowrap">New here?</button>
+            </div>
+
+            <div id="help-panel" class="hidden mt-3 bg-white border border-slate-200 rounded-xl p-5 max-w-3xl">
+                <h3 class="text-sm font-semibold text-[#00133C] mb-2">How this works</h3>
+                <ol class="text-xs text-slate-600 space-y-2 list-decimal pl-4">
+                    <li>
+                        <strong class="text-slate-800">Point it at your data.</strong> Choose a CSV or
+                        Excel file, or paste a Google Sheets link. The tool works out which columns are
+                        numbers you might total and which are categories you might group by, so
+                        everything after this is picking from dropdowns rather than typing column names.
+                        You can skip this and design the layout first with placeholder numbers.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Say what you want.</strong> Type it in plain
+                        words, like <em>revenue by region, total orders, revenue over time</em>, and the
+                        visuals get built and bound for you. Or add them one at a time with the buttons.
+                        Either way you can adjust anything afterwards.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Add slicers if people need to explore.</strong> A
+                        slicer is a control on the finished dashboard, so whoever opens it can narrow
+                        every visual at once, by region or date range for example.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Hand it over.</strong> <em>Download HTML</em>
+                        gives you one file containing the dashboard and its data, which works on its own
+                        with nothing else installed. The <em>link</em> carries the layout but not the
+                        data, so whoever opens it attaches their own copy.
+                    </li>
+                </ol>
+                <p class="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+                    Nothing you load is uploaded anywhere. Files are read inside your browser, and a
+                    Google Sheet is fetched straight from Google by your own browser.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div class="space-y-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <label class="field-label" for="meta-title">Dashboard name</label>
+                    <input id="meta-title" class="field" placeholder="Untitled dashboard">
+
+                    <button onclick="toggleDetails()" id="details-toggle" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium mt-3">More details</button>
+
+                    <div id="meta-details" class="hidden space-y-3 mt-3 pt-3 border-t border-slate-100">
+                        <div>
+                            <label class="field-label" for="meta-subtitle">Description</label>
+                            <textarea id="meta-subtitle" rows="2" class="field resize-y" placeholder="What question does this answer?"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="field-label" for="meta-requester">Owner</label>
+                                <input id="meta-requester" class="field" placeholder="Your name">
+                            </div>
+                            <div>
+                                <label class="field-label" for="meta-audience">Audience</label>
+                                <input id="meta-audience" class="field" placeholder="Leadership">
+                            </div>
+                            <div>
+                                <label class="field-label" for="meta-refresh">Refresh</label>
+                                <select id="meta-refresh" class="field"></select>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="field-label" for="opt-palette">Colours</label>
+                                <select id="opt-palette" class="field"></select>
+                            </div>
+                            <div>
+                                <label class="field-label" for="opt-accent">Main colour</label>
+                                <div class="flex gap-2 items-center">
+                                    <input type="color" id="opt-accent" value="#0062f1" class="h-8 w-12 rounded border border-slate-300 bg-white cursor-pointer">
+                                    <button onclick="clearAccent()" class="text-[11px] text-slate-500 hover:text-[#0062F1] font-medium">Use palette default</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="palette-preview" class="flex gap-1"></div>
+
+                        <div class="pt-3 border-t border-slate-100">
+                            <span class="field-label">Show on the dashboard</span>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1">
+                                <input type="checkbox" id="opt-captions" checked class="accent-[#0062F1]">
+                                What each visual measures, under its title
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1.5">
+                                <input type="checkbox" id="opt-deltas" checked class="accent-[#0062F1]">
+                                Change vs prior period on KPI tiles
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1.5">
+                                <input type="checkbox" id="opt-edit" checked class="accent-[#0062F1]">
+                                An "Edit this dashboard" link on the built file
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-slate-700">1. Your data</h3>
+                        <button id="clear-data" onclick="clearDataset()" class="hidden text-xs text-slate-500 hover:text-red-600 font-medium">Remove file</button>
+                    </div>
+                    <p class="text-xs text-slate-600 mb-3">
+                        Load a CSV or Excel file and you pick from its real columns. Skip it and you still
+                        get the layout, with placeholder numbers. Nothing is uploaded anywhere.
+                    </p>
+                    <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="block w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
+
+                    <div class="flex items-center gap-3 my-3">
+                        <div class="h-px bg-slate-100 flex-1"></div>
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400">or</span>
+                        <div class="h-px bg-slate-100 flex-1"></div>
+                    </div>
+
+                    <label class="field-label" for="sheet-url">Google Sheets link</label>
+                    <div class="flex gap-2">
+                        <input id="sheet-url" class="field font-mono text-[11px]" placeholder="https://docs.google.com/spreadsheets/d/...">
+                        <button onclick="loadSheet()" class="whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">Load</button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1.5">
+                        The sheet has to be readable without signing in: open Share and set General
+                        access to "Anyone with the link". A dashboard built from a sheet re-reads it
+                        every time it is opened, so it stays current.
+                    </p>
+
+                    <p id="data-status" class="text-xs text-slate-500 mt-2"></p>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-slate-700">2. Measures <span class="font-normal text-slate-400">(optional)</span></h3>
+                        <button onclick="addMeasure()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add measure</button>
+                    </div>
+                    <p class="text-xs text-slate-600 mb-3">
+                        A named calculation you define once and reuse in any visual, like Won Deals or
+                        Close Rate. Change it here and every visual using it updates.
+                    </p>
+                    <div id="measure-list" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-slate-700">3. Visuals</h3>
+                        <span id="visual-count" class="text-xs text-slate-500"></span>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                        <label class="field-label" for="instructions">Describe what you want</label>
+                        <textarea id="instructions" rows="2" class="field resize-y"
+                            placeholder="revenue by region, total orders, revenue over time, let me filter by segment"></textarea>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button onclick="applyInstructions()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Build these</button>
+                            <span id="instructions-hint" class="text-[11px] text-slate-500">Separate each one with a comma or a new line.</span>
+                        </div>
+                    </div>
+
+                    <div id="placeholder-warning" class="hidden bg-amber-50 border border-amber-300 rounded-lg px-3 py-2.5 mb-3">
+                        <p class="text-xs text-amber-800 font-medium">The numbers in the preview are made up.</p>
+                        <p class="text-[11px] text-amber-700 mt-0.5">
+                            No data is loaded, so every figure is a placeholder generated from the shape you
+                            asked for. Load your file above to see real values.
+                        </p>
+                    </div>
+
+                    <div id="visual-list" class="space-y-2 mb-3"></div>
+                    <div id="add-buttons" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-slate-700">4. Slicers <span class="font-normal text-slate-400">(optional)</span></h3>
+                        <button onclick="addSlicer()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add slicer</button>
+                    </div>
+                    <p class="text-xs text-slate-600 mb-3">
+                        Controls that let whoever opens the dashboard filter every visual at once.
+                    </p>
+                    <div id="slicer-list" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                    <h3 class="text-sm font-medium text-slate-700">Share it</h3>
+                    <p class="text-xs text-slate-600">
+                        The link carries the layout but not your file, so whoever opens it attaches their
+                        own copy of the data. <strong class="text-[#00133C]">Download HTML</strong> gives
+                        you a single self-contained file with the data already in it, which is usually
+                        what you want to hand someone.
+                    </p>
+                    <div class="flex gap-2">
+                        <input id="share-link" readonly class="field font-mono text-[11px]" value="">
+                        <button onclick="copyShareLink()" class="whitespace-nowrap bg-[#0062F1] hover:bg-[#0050C7] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">Copy link</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 pt-1">
+                        <button onclick="saveToWorkspace()" class="whitespace-nowrap bg-[#00133C] hover:bg-[#0062F1] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">Save to Dashboards</button>
+                        <a href="../../dashboards.html" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Open Dashboards</a>
+                        <span id="save-state" class="text-[11px] text-slate-500"></span>
+                    </div>
+                    <div class="flex flex-wrap gap-3 pt-1">
+                        <button onclick="openPreview()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Open full preview</button>
+                        <button onclick="downloadStandalone()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Download HTML</button>
+                        <button onclick="downloadSpecJson()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Download spec JSON</button>
+                        <button onclick="resetSpec()" class="text-xs text-slate-500 hover:text-red-600 font-medium">Start over</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="xl:sticky xl:top-6 xl:self-start">
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-4">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Live preview</p>
+                    <div id="preview" class="bg-slate-50 rounded-lg p-4 max-h-[75vh] overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/match.js"></script>
+    <script src="../shared/sheet-connect.js"></script>
+    <script src="../shared/dashboard-spec.js"></script>
+    <script src="../shared/dashboard-parse.js"></script>
+    <script src="../shared/workspace.js"></script>
+    <script src="../shared/dashboard-data.js"></script>
+    <script src="../shared/dashboard-render.js"></script>
+    <script>
+        let spec = null;
+        let charts = [];
+        let nextId = 1;
+        let dataset = null;
+        let openVisual = null;
+        let openMeasure = null;
+        const openAdvanced = new Set();
+
+        function toggleHelp() {
+            const panel = document.getElementById('help-panel');
+            const hidden = panel.classList.toggle('hidden');
+            document.getElementById('help-toggle').textContent = hidden ? 'New here?' : 'Hide help';
+        }
+
+        function toggleDetails() {
+            const panel = document.getElementById('meta-details');
+            const hidden = panel.classList.toggle('hidden');
+            document.getElementById('details-toggle').textContent = hidden ? 'More details' : 'Fewer details';
+        }
+
+        function showToast(message, tone = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const palette = tone === 'error'
+                ? 'bg-red-50 border-red-300 text-red-600'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-700';
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md border ${palette}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), tone === 'error' ? 6000 : 2500);
+        }
+
+        function makeId() {
+            let id = `v${nextId}`;
+            const taken = new Set(spec.visuals.map((v) => v.id));
+            while (taken.has(id)) {
+                nextId++;
+                id = `v${nextId}`;
+            }
+            nextId++;
+            return id;
+        }
+
+        function option(value, label, selected) {
+            const el = document.createElement('option');
+            el.value = value;
+            el.textContent = label || value;
+            if (selected) el.selected = true;
+            return el;
+        }
+
+        function fillSelect(select, values, current, labelFor) {
+            select.textContent = '';
+            for (const value of values) select.appendChild(option(value, labelFor ? labelFor(value) : value, value === current));
+        }
+
+        function labelledField(labelText, control) {
+            const wrap = document.createElement('div');
+            const label = document.createElement('label');
+            label.className = 'field-label';
+            label.textContent = labelText;
+            wrap.appendChild(label);
+            wrap.appendChild(control);
+            return wrap;
+        }
+
+        function textField(value, placeholder, onChange) {
+            const input = document.createElement('input');
+            input.className = 'field';
+            input.value = value || '';
+            input.placeholder = placeholder || '';
+            input.addEventListener('input', () => onChange(input.value));
+            return input;
+        }
+
+        function selectField(values, current, onChange, labelFor) {
+            const select = document.createElement('select');
+            select.className = 'field';
+            fillSelect(select, values, current, labelFor);
+            select.addEventListener('change', () => onChange(select.value));
+            return select;
+        }
+
+        function iconButton(label, title, onClick, tone) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.title = title;
+            button.textContent = label;
+            button.className = `text-xs px-2 py-1 rounded border transition-colors ${tone === 'danger'
+                ? 'border-slate-200 text-slate-400 hover:border-red-300 hover:text-red-600'
+                : 'border-slate-200 text-slate-500 hover:border-[#0062F1] hover:text-[#0062F1]'}`;
+            button.addEventListener('click', onClick);
+            return button;
+        }
+
+        function countsAnything(aggregation) {
+            return aggregation === 'count' || aggregation === 'distinct count';
+        }
+
+        function columnsFor(role, aggregation) {
+            if (!dataset) return null;
+            if (role === 'measure') {
+                if (countsAnything(aggregation)) return dataset.columns;
+                return dataset.measureColumns.length ? dataset.measureColumns : dataset.columns;
+            }
+            if (role === 'dimension') return dataset.dimensionColumns.length ? dataset.dimensionColumns : dataset.columns;
+            return dataset.columns;
+        }
+
+        function columnField(role, current, placeholder, onChange, aggregation) {
+            const options = columnsFor(role, aggregation);
+            if (!options) return textField(current, placeholder, onChange);
+
+            const values = options.includes(current) ? options : [current].concat(options);
+            return selectField(values, current, onChange);
+        }
+
+        function distinctValues(field) {
+            if (!dataset || !dataset.columns.includes(field)) return [];
+            const seen = new Set();
+            for (const row of dataset.rows) {
+                seen.add(dashboardCellText(row[field]));
+                if (seen.size > 40) break;
+            }
+            return Array.from(seen).sort();
+        }
+
+        function buildFilterRow(filters, filter, filterIndex) {
+            const row = document.createElement('div');
+            row.className = 'flex gap-1.5 items-center';
+
+            row.appendChild(columnField('any', filter.field, 'Column', (v) => { filter.field = v; refresh(); }));
+            row.appendChild(selectField(DASHBOARD_FILTER_OPERATORS, filter.op, (v) => { filter.op = v; refresh(); }));
+
+            const values = distinctValues(filter.field);
+            if (values.length > 0 && (filter.op === 'equals' || filter.op === 'not equals')) {
+                row.appendChild(selectField(values.includes(filter.value) ? values : [filter.value].concat(values), filter.value, (v) => { filter.value = v; refresh(false); }));
+            } else {
+                row.appendChild(textField(filter.value, 'Value', (v) => { filter.value = v; refresh(false); }));
+            }
+
+            row.appendChild(iconButton('\u2715', 'Remove filter', () => {
+                filters.splice(filterIndex, 1);
+                refresh();
+            }, 'danger'));
+
+            return row;
+        }
+
+        function buildFilterList(filters, labelText) {
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-2 pt-2 border-t border-slate-200';
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center justify-between mb-1.5';
+
+            const label = document.createElement('span');
+            label.className = 'field-label';
+            label.style.marginBottom = '0';
+            label.textContent = `${labelText}${filters.length ? ` (${filters.length})` : ''}`;
+            head.appendChild(label);
+
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'text-[11px] text-[#0062F1] hover:text-[#00133C] font-medium';
+            add.textContent = '+ Add filter';
+            add.addEventListener('click', () => {
+                const field = dataset ? dataset.columns[0] : '';
+                filters.push({ field: field || 'Column', op: 'equals', value: '' });
+                refresh();
+            });
+            head.appendChild(add);
+            wrap.appendChild(head);
+
+            if (filters.length > 1) {
+                const note = document.createElement('p');
+                note.className = 'text-[10px] text-slate-500 mb-1.5';
+                note.textContent = 'Filters on the same column are combined with "or", different columns with "and".';
+                wrap.appendChild(note);
+            }
+
+            if (filters.length > 0) {
+                const list = document.createElement('div');
+                list.className = 'space-y-1.5';
+                filters.forEach((filter, i) => list.appendChild(buildFilterRow(filters, filter, i)));
+                wrap.appendChild(list);
+            }
+
+            return wrap;
+        }
+
+        function buildFilterSection(visual) {
+            return buildFilterList(visual.binding.filters, visual.binding.divideBy ? 'Filters, top number only' : 'Filters');
+        }
+
+        function buildRatioSection(visual) {
+            const binding = visual.binding;
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-2 pt-2 border-t border-slate-200';
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center justify-between mb-1.5';
+
+            const label = document.createElement('span');
+            label.className = 'field-label';
+            label.style.marginBottom = '0';
+            label.textContent = 'Divide by another number';
+            head.appendChild(label);
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'text-[11px] text-[#0062F1] hover:text-[#00133C] font-medium';
+            toggle.textContent = binding.divideBy ? 'Remove' : '+ Add';
+            toggle.addEventListener('click', () => {
+                if (binding.divideBy) {
+                    binding.divideBy = null;
+                    binding.format = 'auto';
+                } else {
+                    const fallback = dataset ? dataset.columns[0] : binding.measure;
+                    binding.divideBy = { measure: binding.measure || fallback, aggregation: binding.aggregation, filters: [] };
+                    binding.format = 'percent';
+                }
+                refresh();
+            });
+            head.appendChild(toggle);
+            wrap.appendChild(head);
+
+            if (!binding.divideBy) {
+                const hint = document.createElement('p');
+                hint.className = 'text-[10px] text-slate-500';
+                hint.textContent = 'For rates like close rate: filter the top number to what counts as a win, and divide by the count of everything.';
+                wrap.appendChild(hint);
+                return wrap;
+            }
+
+            wrap.appendChild(buildDivisorFields(binding.divideBy, null));
+
+            wrap.appendChild(labelledField('Show as', selectField(['percent', 'number'], binding.format === 'number' ? 'number' : 'percent', (v) => {
+                binding.format = v; refresh(false);
+            }, (f) => (f === 'percent' ? 'Percentage' : 'Plain ratio'))));
+
+            const explain = document.createElement('p');
+            explain.className = 'text-[10px] text-slate-500 mt-1.5';
+            const top = `${binding.aggregation} of ${binding.measure}${binding.filters.length ? ' (filtered)' : ''}`;
+            const bottom = `${binding.divideBy.aggregation} of ${binding.divideBy.measure}${binding.divideBy.filters.length ? ' (filtered)' : ' (all rows)'}`;
+            explain.textContent = `${top} divided by ${bottom}.`;
+            wrap.appendChild(explain);
+
+            return wrap;
+        }
+
+        function addMeasure() {
+            const fallback = dataset ? (dataset.measureColumns[0] || dataset.columns[0]) : 'Revenue';
+            spec.measures.push({
+                id: `m${spec.measures.length + 1}_${Date.now().toString(36).slice(-4)}`,
+                name: `Measure ${spec.measures.length + 1}`,
+                measure: fallback,
+                aggregation: 'sum',
+                filters: [],
+                divideBy: null,
+                format: 'auto'
+            });
+            openMeasure = spec.measures[spec.measures.length - 1].id;
+            refresh();
+        }
+
+        function measureUsedBy(id) {
+            return spec.visuals.filter((v) => v.binding.measureRef === id).length;
+        }
+
+        function buildMeasureEditor(measure, index) {
+            const open = openMeasure === measure.id;
+            const card = document.createElement('div');
+            card.className = `border rounded-lg bg-slate-50 ${open ? 'border-[#0062F1]' : 'border-slate-200'}`;
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center gap-2 p-2.5';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'flex items-center gap-2 flex-1 min-w-0 text-left';
+            toggle.addEventListener('click', () => {
+                openMeasure = open ? null : measure.id;
+                renderEditor();
+            });
+
+            const caret = document.createElement('span');
+            caret.className = 'text-slate-400 text-[10px] w-3 shrink-0';
+            caret.textContent = open ? '\u25BC' : '\u25B6';
+            toggle.appendChild(caret);
+
+            const name = document.createElement('span');
+            name.className = 'text-xs font-semibold text-[#00133C] truncate';
+            name.textContent = measure.name;
+            toggle.appendChild(name);
+
+            const detail = document.createElement('span');
+            detail.className = 'text-[11px] text-slate-500 truncate';
+            const bottom = measure.divideBy ? ` over ${measure.divideBy.aggregation} of ${measure.divideBy.measure}` : '';
+            const used = measureUsedBy(measure.id);
+            detail.textContent = `${measure.aggregation} of ${measure.measure}${bottom}${used ? ` \u00b7 used ${used}\u00d7` : ''}`;
+            toggle.appendChild(detail);
+
+            head.appendChild(toggle);
+            head.appendChild(iconButton('\u2715', 'Remove measure', () => {
+                for (const v of spec.visuals) {
+                    if (v.binding.measureRef === measure.id) v.binding.measureRef = null;
+                }
+                spec.measures.splice(index, 1);
+                refresh();
+            }, 'danger'));
+            card.appendChild(head);
+
+            if (!open) return card;
+
+            const body = document.createElement('div');
+            body.className = 'px-2.5 pb-2.5 space-y-2';
+
+            body.appendChild(labelledField('Name', textField(measure.name, 'Won Deals', (v) => { measure.name = v; refresh(false); })));
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+            grid.appendChild(labelledField(countsAnything(measure.aggregation) ? 'Count of' : 'Column',
+                columnField('measure', measure.measure, 'Revenue', (v) => { measure.measure = v; refresh(false); }, measure.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, measure.aggregation, (v) => { measure.aggregation = v; refresh(); })));
+            grid.appendChild(labelledField('Show as', selectField(DASHBOARD_FORMATS, measure.format, (v) => { measure.format = v; refresh(false); },
+                (f) => ({ auto: 'Automatic', percent: 'Percentage', number: 'Plain number', currency: 'Currency' })[f])));
+            body.appendChild(grid);
+
+            const ratioWrap = document.createElement('div');
+            ratioWrap.className = 'mt-2 pt-2 border-t border-slate-200';
+            const ratioHead = document.createElement('div');
+            ratioHead.className = 'flex items-center justify-between mb-1.5';
+            const ratioLabel = document.createElement('span');
+            ratioLabel.className = 'field-label';
+            ratioLabel.style.marginBottom = '0';
+            ratioLabel.textContent = 'Divide by another number';
+            ratioHead.appendChild(ratioLabel);
+
+            const ratioToggle = document.createElement('button');
+            ratioToggle.type = 'button';
+            ratioToggle.className = 'text-[11px] text-[#0062F1] hover:text-[#00133C] font-medium';
+            ratioToggle.textContent = measure.divideBy ? 'Remove' : '+ Add';
+            ratioToggle.addEventListener('click', () => {
+                if (measure.divideBy) {
+                    measure.divideBy = null;
+                    measure.format = 'auto';
+                } else {
+                    measure.divideBy = { measure: measure.measure, aggregation: measure.aggregation, filters: [] };
+                    measure.format = 'percent';
+                }
+                refresh();
+            });
+            ratioHead.appendChild(ratioToggle);
+            ratioWrap.appendChild(ratioHead);
+
+            if (measure.divideBy) {
+                ratioWrap.appendChild(buildDivisorFields(measure.divideBy, measure.id));
+            }
+
+            body.appendChild(ratioWrap);
+            body.appendChild(buildFilterList(measure.filters, measure.divideBy ? 'Filters, top number only' : 'Filters'));
+            card.appendChild(body);
+
+            return card;
+        }
+
+        function renderMeasureEditor() {
+            const list = document.getElementById('measure-list');
+            list.textContent = '';
+
+            if (spec.measures.length === 0) {
+                const hint = document.createElement('p');
+                hint.className = 'text-xs text-slate-400 italic';
+                hint.textContent = 'None yet. Visuals can define their own numbers without one.';
+                list.appendChild(hint);
+                return;
+            }
+
+            spec.measures.forEach((measure, index) => list.appendChild(buildMeasureEditor(measure, index)));
+        }
+
+        function buildDivisorFields(divideBy, ownerMeasureId) {
+            const wrap = document.createElement('div');
+            const usable = spec.measures.filter((m) => m.id !== ownerMeasureId);
+
+            if (usable.length > 0) {
+                const ids = [''].concat(usable.map((m) => m.id));
+                wrap.appendChild(labelledField('Bottom number', selectField(ids, divideBy.measureRef || '', (v) => {
+                    divideBy.measureRef = v || null;
+                    refresh();
+                }, (id) => (id ? (usable.find((m) => m.id === id) || {}).name : 'A column, set below'))));
+            }
+
+            if (divideBy.measureRef && usable.some((m) => m.id === divideBy.measureRef)) {
+                const named = usable.find((m) => m.id === divideBy.measureRef);
+                const note = document.createElement('p');
+                note.className = 'text-[10px] text-slate-500 mt-1';
+                note.textContent = `Dividing by the "${named.name}" measure, including its own filters.`;
+                wrap.appendChild(note);
+                return wrap;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 gap-2 mt-1';
+            grid.appendChild(labelledField(usable.length > 0 ? 'Column' : 'Bottom number',
+                columnField('measure', divideBy.measure, 'Revenue', (v) => { divideBy.measure = v; refresh(false); }, divideBy.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, divideBy.aggregation, (v) => { divideBy.aggregation = v; refresh(); })));
+            wrap.appendChild(grid);
+            wrap.appendChild(buildFilterList(divideBy.filters, 'Filters, bottom number only'));
+
+            return wrap;
+        }
+
+        function buildColumnPicker(visual) {
+            const wrap = document.createElement('div');
+            const chosen = visual.binding.columns || [];
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center justify-between mb-1';
+            const label = document.createElement('span');
+            label.className = 'field-label';
+            label.style.marginBottom = '0';
+            label.textContent = `Columns to show${chosen.length ? ` (${chosen.length})` : ''}`;
+            head.appendChild(label);
+            wrap.appendChild(head);
+
+            if (!dataset) {
+                const hint = document.createElement('p');
+                hint.className = 'text-[10px] text-slate-500';
+                hint.textContent = 'Load a file and its columns appear here to tick.';
+                wrap.appendChild(hint);
+                return wrap;
+            }
+
+            const list = document.createElement('div');
+            list.className = 'flex flex-wrap gap-1.5';
+
+            for (const column of dataset.columns) {
+                const active = chosen.includes(column);
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.textContent = column;
+                chip.className = `text-[11px] rounded-full px-2.5 py-1 border transition-colors ${active
+                    ? 'bg-[#0062F1] border-[#0062F1] text-white'
+                    : 'bg-white border-slate-300 text-slate-600 hover:border-[#0062F1]'}`;
+                chip.addEventListener('click', () => {
+                    const next = chosen.slice();
+                    const at = next.indexOf(column);
+                    if (at === -1) next.push(column);
+                    else next.splice(at, 1);
+                    visual.binding.columns = next;
+                    refresh();
+                });
+                list.appendChild(chip);
+            }
+
+            wrap.appendChild(list);
+
+            const hint = document.createElement('p');
+            hint.className = 'text-[10px] text-slate-500 mt-1';
+            hint.textContent = chosen.length ? 'Shown in the order you tick them.' : 'None ticked, so every column is shown.';
+            wrap.appendChild(hint);
+
+            return wrap;
+        }
+
+        function advancedSection(visual, index) {
+            const advanced = document.createElement('div');
+            const advancedOpen = openAdvanced.has(visual.id);
+
+            const advancedToggle = document.createElement('button');
+            advancedToggle.type = 'button';
+            advancedToggle.className = 'text-[11px] text-slate-500 hover:text-[#0062F1] font-medium';
+            advancedToggle.textContent = advancedOpen ? 'Fewer options' : 'More options';
+            advancedToggle.addEventListener('click', () => {
+                if (advancedOpen) openAdvanced.delete(visual.id);
+                else openAdvanced.add(visual.id);
+                renderEditor();
+            });
+            advanced.appendChild(advancedToggle);
+
+            if (!advancedOpen) return advanced;
+
+            const shape = DASHBOARD_VISUAL_KINDS[visual.kind];
+            const extra = document.createElement('div');
+            extra.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2';
+            extra.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
+            extra.appendChild(labelledField('Chart type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
+            if (!dataset) {
+                extra.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
+            }
+            advanced.appendChild(extra);
+
+            const notes = document.createElement('textarea');
+            notes.className = 'field resize-y mt-2';
+            notes.rows = 1;
+            notes.placeholder = 'Notes about this visual';
+            notes.value = visual.notes;
+            notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
+            advanced.appendChild(notes);
+
+            if (!shape.needsColumns) advanced.appendChild(buildRatioSection(visual));
+            advanced.appendChild(buildFilterSection(visual));
+
+            return advanced;
+        }
+
+        function buildVisualEditor(visual, index) {
+            const shape = DASHBOARD_VISUAL_KINDS[visual.kind];
+            const open = openVisual === visual.id;
+            const card = document.createElement('div');
+            card.className = `border rounded-lg bg-slate-50 ${open ? 'border-[#0062F1]' : 'border-slate-200'}`;
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center gap-2 p-2.5';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'flex items-center gap-2 flex-1 min-w-0 text-left';
+            toggle.addEventListener('click', () => {
+                openVisual = open ? null : visual.id;
+                renderEditor();
+            });
+
+            const caret = document.createElement('span');
+            caret.className = 'text-slate-400 text-[10px] w-3 shrink-0';
+            caret.textContent = open ? '▼' : '▶';
+            toggle.appendChild(caret);
+
+            const badge = document.createElement('span');
+            badge.className = 'text-[10px] font-semibold uppercase tracking-wider text-[#0062F1] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 whitespace-nowrap shrink-0';
+            badge.textContent = shape.label;
+            toggle.appendChild(badge);
+
+            const summary = document.createElement('span');
+            summary.className = 'text-xs text-slate-700 truncate';
+            summary.textContent = `${visual.title} · ${dashboardBindingSummary(visual)}`;
+            toggle.appendChild(summary);
+
+            head.appendChild(toggle);
+
+            const controls = document.createElement('div');
+            controls.className = 'flex gap-1 shrink-0';
+            controls.appendChild(iconButton('↑', 'Move up', () => moveVisual(index, -1)));
+            controls.appendChild(iconButton('↓', 'Move down', () => moveVisual(index, 1)));
+            controls.appendChild(iconButton('✕', 'Remove', () => removeVisual(index), 'danger'));
+            head.appendChild(controls);
+            card.appendChild(head);
+
+            if (!open) return card;
+
+            const body = document.createElement('div');
+            body.className = 'px-2.5 pb-2.5 space-y-2';
+
+            const titleInput = textField(visual.title, 'Visual title', (v) => { visual.title = v; refresh(false); });
+            titleInput.className = 'field font-medium';
+            body.appendChild(labelledField('Title', titleInput));
+
+            if (shape.needsColumns) {
+                body.appendChild(buildColumnPicker(visual));
+
+                const detailGrid = document.createElement('div');
+                detailGrid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+                detailGrid.appendChild(labelledField('Sort by', columnField('any', visual.binding.sortBy || '', 'Column', (v) => { visual.binding.sortBy = v; refresh(false); })));
+                detailGrid.appendChild(labelledField('Direction', selectField(['none', 'ascending', 'descending'], visual.binding.sort, (v) => { visual.binding.sort = v; refresh(false); },
+                    (d) => ({ none: 'File order', ascending: 'Smallest first', descending: 'Largest first' })[d])));
+                detailGrid.appendChild(labelledField('Show rows', selectField(['10', '15', '20', '30', '50'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+                body.appendChild(detailGrid);
+                body.appendChild(advancedSection(visual, index));
+                card.appendChild(body);
+                return card;
+            }
+
+            if (spec.measures.length > 0) {
+                const named = spec.measures.find((m) => m.id === visual.binding.measureRef);
+                const ids = [''].concat(spec.measures.map((m) => m.id));
+                body.appendChild(labelledField('Number to show', selectField(ids, visual.binding.measureRef || '', (v) => {
+                    visual.binding.measureRef = v || null;
+                    refresh();
+                }, (id) => (id ? (spec.measures.find((m) => m.id === id) || {}).name : 'Define it below'))));
+
+                if (named) {
+                    const note = document.createElement('p');
+                    note.className = 'text-[10px] text-slate-500';
+                    note.textContent = `Using the "${named.name}" measure. Edit it under Measures to change every visual that uses it.`;
+                    body.appendChild(note);
+
+                    if (shape.needsDimension) {
+                        const dimGrid = document.createElement('div');
+                        dimGrid.className = 'grid grid-cols-2 gap-2';
+                        dimGrid.appendChild(labelledField('Break down by', columnField('dimension', visual.binding.dimension, 'Region', (v) => { visual.binding.dimension = v; refresh(false); })));
+                        dimGrid.appendChild(labelledField('Show top', selectField(['5', '6', '8', '10', '15', '20'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+                        body.appendChild(dimGrid);
+                    }
+                    if (shape.needsGrain) {
+                        body.appendChild(labelledField('Time grain', selectField(DASHBOARD_GRAINS, visual.binding.grain, (v) => { visual.binding.grain = v; refresh(false); })));
+                    }
+
+                    body.appendChild(advancedSection(visual, index));
+                    card.appendChild(body);
+                    return card;
+                }
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+
+            grid.appendChild(labelledField(countsAnything(visual.binding.aggregation) ? 'Count of' : 'Measure',
+                columnField('measure', visual.binding.measure, 'Revenue', (v) => { visual.binding.measure = v; refresh(false); }, visual.binding.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, visual.binding.aggregation, (v) => {
+                const wasCounting = countsAnything(visual.binding.aggregation);
+                visual.binding.aggregation = v;
+                if (wasCounting !== countsAnything(v)) refresh();
+                else refresh(false);
+            })));
+
+            if (shape.needsDimension) {
+                grid.appendChild(labelledField('Break down by', columnField('dimension', visual.binding.dimension, 'Region', (v) => { visual.binding.dimension = v; refresh(false); })));
+            }
+            if (shape.needsSecondMeasure) {
+                grid.appendChild(labelledField('Against', columnField('measure', visual.binding.measure2, 'Units', (v) => { visual.binding.measure2 = v; refresh(false); })));
+            }
+            if (shape.needsGrain) {
+                grid.appendChild(labelledField('Time grain', selectField(DASHBOARD_GRAINS, visual.binding.grain, (v) => { visual.binding.grain = v; refresh(false); })));
+            }
+            if (shape.needsDimension) {
+                grid.appendChild(labelledField('Show top', selectField(['5', '6', '8', '10', '15', '20'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+            }
+
+            body.appendChild(grid);
+
+            body.appendChild(advancedSection(visual, index));
+            card.appendChild(body);
+
+            return card;
+        }
+
+        function buildSlicerEditor(slicer, index) {
+            const row = document.createElement('div');
+            row.className = 'flex gap-1.5 items-end border border-slate-200 rounded-lg p-2 bg-slate-50';
+
+            row.appendChild(labelledField('Column', columnField('any', slicer.field, 'Region', (v) => {
+                if (slicer.label === slicer.field) slicer.label = v;
+                slicer.field = v;
+                refresh();
+            })));
+            row.appendChild(labelledField('Label', textField(slicer.label, 'Region', (v) => { slicer.label = v; refresh(false); })));
+            row.appendChild(labelledField('Type', selectField(DASHBOARD_SLICER_TYPES, slicer.type, (v) => { slicer.type = v; refresh(false); })));
+            row.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, slicer.width, (v) => { slicer.width = v; refresh(false); },
+                (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full' })[w])));
+
+            const remove = iconButton('✕', 'Remove slicer', () => {
+                spec.slicers.splice(index, 1);
+                refresh();
+            }, 'danger');
+            remove.style.marginBottom = '1px';
+            row.appendChild(remove);
+
+            return row;
+        }
+
+        function addSlicer() {
+            const field = dataset ? (dataset.dimensionColumns[0] || dataset.columns[0]) : 'Region';
+            spec.slicers.push({ id: `s${spec.slicers.length + 1}`, field, label: field, type: 'dropdown', width: 'quarter' });
+            refresh();
+        }
+
+        function renderSlicerEditor() {
+            const list = document.getElementById('slicer-list');
+            list.textContent = '';
+
+            if (spec.slicers.length === 0) {
+                const hint = document.createElement('p');
+                hint.className = 'text-xs text-slate-400 italic';
+                hint.textContent = 'None yet. The dashboard will show all rows.';
+                list.appendChild(hint);
+                return;
+            }
+
+            spec.slicers.forEach((slicer, index) => list.appendChild(buildSlicerEditor(slicer, index)));
+        }
+
+        function renderEditor() {
+            renderMeasureEditor();
+            renderSlicerEditor();
+
+            const list = document.getElementById('visual-list');
+            list.textContent = '';
+
+            if (spec.visuals.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-4 text-center';
+                empty.textContent = dataset
+                    ? 'Nothing yet. Pick a visual below to start building.'
+                    : 'Nothing yet. Pick a visual below, or load a file first to use your own columns.';
+                list.appendChild(empty);
+            } else {
+                spec.visuals.forEach((visual, index) => list.appendChild(buildVisualEditor(visual, index)));
+            }
+
+            const count = spec.visuals.length;
+            document.getElementById('visual-count').textContent = count === 0
+                ? ''
+                : `${count} visual${count === 1 ? '' : 's'}`;
+        }
+
+        function renderPreview(normalized) {
+            for (const chart of charts) chart.destroy();
+            charts = dashboardRenderSpec(normalized, document.getElementById('preview'), { showNotes: false, showFooter: false, dataset });
+        }
+
+        function currentLink(normalized) {
+            const base = window.location.href.replace(/[?#].*$/, '').replace(/index\.html$/, '');
+            return `${base}view.html#${dashboardEncodeSpec(normalized || dashboardNormalizeSpec(spec))}`;
+        }
+
+        function refresh(rebuildEditor = true) {
+            const normalized = dashboardNormalizeSpec(spec);
+
+            const warning = document.getElementById('placeholder-warning');
+            const usingPlaceholders = !dataset && normalized.visuals.length > 0;
+            warning.classList.toggle('hidden', !usingPlaceholders);
+
+            if (rebuildEditor) renderEditor();
+            renderPreview(normalized);
+            document.getElementById('share-link').value = currentLink(normalized);
+            window.history.replaceState(null, '', `#${dashboardEncodeSpec(normalized)}`);
+        }
+
+        function suggestedBinding() {
+            if (!dataset) {
+                return { source: 'Sales', measure: 'Revenue', aggregation: 'sum', dimension: 'Region', measure2: 'Units', grain: 'month', limit: 8 };
+            }
+            const measures = columnsFor('measure');
+            const dimensions = columnsFor('dimension');
+            return {
+                source: dataset.source,
+                measure: measures[0] || dataset.columns[0],
+                aggregation: 'sum',
+                dimension: dimensions[0] || dataset.columns[0],
+                measure2: measures[1] || measures[0] || dataset.columns[0],
+                grain: 'month',
+                limit: 8
+            };
+        }
+
+        function suggestedTitle(kind, binding) {
+            const shape = DASHBOARD_VISUAL_KINDS[kind];
+            if (kind === 'kpi') return `Total ${binding.measure}`;
+            if (kind === 'trend') return `${binding.measure} over time`;
+            if (kind === 'scatter') return `${binding.measure} against ${binding.measure2}`;
+            if (shape.needsDimension) return `${binding.measure} by ${binding.dimension}`;
+            return shape.label;
+        }
+
+        function addVisual(kind) {
+            const shape = DASHBOARD_VISUAL_KINDS[kind];
+            const binding = suggestedBinding();
+            const id = makeId();
+
+            spec.visuals.push(dashboardNormalizeVisual({
+                id,
+                kind,
+                title: suggestedTitle(kind, binding),
+                width: shape.defaultWidth,
+                binding
+            }, spec.visuals.length));
+
+            openVisual = id;
+            refresh();
+        }
+
+        function changeKind(index, kind) {
+            const existing = spec.visuals[index];
+            spec.visuals[index] = dashboardNormalizeVisual({
+                id: existing.id,
+                kind,
+                title: existing.title,
+                width: DASHBOARD_VISUAL_KINDS[kind].defaultWidth,
+                notes: existing.notes,
+                binding: Object.assign({}, existing.binding, {
+                    dimension: existing.binding.dimension || 'Region',
+                    measure2: existing.binding.measure2 || 'Units',
+                    grain: existing.binding.grain || 'month'
+                })
+            }, index);
+            refresh();
+        }
+
+        function moveVisual(index, delta) {
+            const target = index + delta;
+            if (target < 0 || target >= spec.visuals.length) return;
+            const [item] = spec.visuals.splice(index, 1);
+            spec.visuals.splice(target, 0, item);
+            refresh();
+        }
+
+        function removeVisual(index) {
+            const [gone] = spec.visuals.splice(index, 1);
+            if (gone && openVisual === gone.id) openVisual = null;
+            if (gone) openAdvanced.delete(gone.id);
+            refresh();
+        }
+
+        function classifyDataset(parsed, name) {
+            const profiles = profileDataset(parsed.columns, parsed.rows);
+            const measureColumns = profiles.filter((p) => p.type === 'number').map((p) => p.name);
+            const dimensionColumns = profiles.filter((p) => p.type === 'category' || p.type === 'boolean' || p.type === 'constant').map((p) => p.name);
+            const dateProfile = profiles.find((p) => p.type === 'date');
+
+            return {
+                source: name,
+                columns: parsed.columns.slice(),
+                rows: parsed.rows,
+                rowCount: parsed.rows.length,
+                measureColumns,
+                dimensionColumns,
+                dateColumn: dateProfile ? dateProfile.name : null,
+                profiles
+            };
+        }
+
+        function retargetBindings() {
+            if (!dataset) return;
+            const measures = columnsFor('measure');
+            const dimensions = columnsFor('dimension');
+
+            for (const visual of spec.visuals) {
+                if (!dataset.columns.includes(visual.binding.measure)) visual.binding.measure = measures[0] || dataset.columns[0];
+                if (visual.binding.dimension && !dataset.columns.includes(visual.binding.dimension)) visual.binding.dimension = dimensions[0] || dataset.columns[0];
+                if (visual.binding.measure2 && !dataset.columns.includes(visual.binding.measure2)) visual.binding.measure2 = measures[1] || measures[0] || dataset.columns[0];
+                visual.binding.filters = visual.binding.filters.filter((f) => dataset.columns.includes(f.field));
+                if (visual.binding.source === 'Not specified' || visual.binding.source === 'Sales') visual.binding.source = dataset.source;
+            }
+        }
+
+        document.getElementById('data-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading file...';
+
+            try {
+                const parsed = await parseFileToRows(file);
+                if (parsed.columns.length === 0) throw new Error('No readable columns found.');
+
+                dataset = classifyDataset(parsed, file.name);
+
+                const bits = [`${file.name} — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns`];
+                if (parsed.combined) bits.push(`combined ${parsed.sheetNames.length} sheets`);
+                else if (parsed.sheetNames && parsed.sheetNames.length > 1) bits.push(`sheet "${parsed.sheetName}"`);
+                if (dataset.dateColumn) bits.push(`date column "${dataset.dateColumn}"`);
+                else bits.push('no date column found, so trend visuals will be empty');
+                status.textContent = bits.join(' · ');
+
+                document.getElementById('clear-data').classList.remove('hidden');
+                retargetBindings();
+                rememberDataset();
+                refresh();
+                showToast('File loaded. The visuals now use your data.');
+            } catch (err) {
+                status.textContent = '';
+                showToast('Could not read that file: ' + err.message, 'error');
+            }
+
+            e.target.value = '';
+        });
+
+        async function loadSheet() {
+            const url = document.getElementById('sheet-url').value.trim();
+            if (url === '') {
+                showToast('Paste the link to your Google Sheet first.', 'error');
+                return;
+            }
+
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading the sheet...';
+
+            try {
+                let targetUrl = url;
+                const tabs = await fetchGoogleSheetTabs(url);
+
+                if (tabs && tabs.length > 1) {
+                    status.textContent = 'Choose which tab to read...';
+                    const chosen = await chooseGoogleSheetTab(tabs, googleSheetTabFromUrl(url));
+                    if (chosen === null) {
+                        status.textContent = '';
+                        return;
+                    }
+                    targetUrl = googleSheetUrlWithTab(url, chosen);
+                    status.textContent = 'Reading the sheet...';
+                }
+
+                const parsed = await fetchGoogleSheet(targetUrl);
+                dataset = classifyDataset(parsed, 'Google Sheet');
+                dataset.sheetUrl = targetUrl;
+                spec.source = { kind: 'googleSheet', url: targetUrl };
+
+                const bits = [`Google Sheet — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns`];
+                const tabLabel = googleSheetTabFromUrl(targetUrl);
+                if (tabLabel) bits.push(`tab "${tabLabel}"`);
+                if (dataset.dateColumn) bits.push(`date column "${dataset.dateColumn}"`);
+                bits.push('re-read every time the dashboard opens');
+                status.textContent = bits.join(' · ');
+
+                document.getElementById('clear-data').classList.remove('hidden');
+                retargetBindings();
+                rememberDataset();
+                refresh();
+                showToast('Sheet connected. The dashboard will re-read it on every open.');
+            } catch (err) {
+                status.textContent = '';
+                showToast(err.message, 'error');
+            }
+        }
+
+        function clearDataset() {
+            dataset = null;
+            spec.source = null;
+            rememberDataset();
+            document.getElementById('data-status').textContent = '';
+            document.getElementById('data-input').value = '';
+            document.getElementById('sheet-url').value = '';
+            document.getElementById('clear-data').classList.add('hidden');
+            refresh();
+            showToast('Data removed. Back to placeholder numbers.');
+        }
+
+        function applyInstructions() {
+            const text = document.getElementById('instructions').value;
+            if (text.trim() === '') {
+                showToast('Type what you want first, for example "revenue by region".', 'error');
+                return;
+            }
+
+            const catalogue = dataset || { columns: [], measureColumns: [], dimensionColumns: [], dateColumn: null };
+            const result = parseDashboardInstructions(text, catalogue);
+
+            if (result.visuals.length === 0 && result.slicers.length === 0) {
+                showToast('Could not work that out. Try naming a column, like "revenue by region".', 'error');
+                return;
+            }
+
+            for (const visual of result.visuals) {
+                visual.id = makeId();
+                spec.visuals.push(dashboardNormalizeVisual(visual, spec.visuals.length));
+            }
+            for (const slicer of result.slicers) {
+                slicer.id = `s${spec.slicers.length + 1}`;
+                spec.slicers.push(slicer);
+            }
+
+            openVisual = null;
+            document.getElementById('instructions').value = '';
+
+            const hint = document.getElementById('instructions-hint');
+            const built = [];
+            if (result.visuals.length) built.push(`${result.visuals.length} visual${result.visuals.length === 1 ? '' : 's'}`);
+            if (result.slicers.length) built.push(`${result.slicers.length} slicer${result.slicers.length === 1 ? '' : 's'}`);
+            hint.textContent = result.unmatched.length
+                ? `Built ${built.join(' and ')}. Could not understand: ${result.unmatched.join('; ')}`
+                : `Built ${built.join(' and ')}. Adjust anything below.`;
+
+            refresh();
+        }
+
+        function copyShareLink() {
+            navigator.clipboard.writeText(currentLink())
+                .then(() => showToast('Link copied. Send it to whoever needs to see this.'))
+                .catch(() => showToast('Could not copy. Select the link and copy it manually.', 'error'));
+        }
+
+        function openPreview() {
+            window.open(currentLink(), '_blank', 'noopener');
+        }
+
+        function downloadFile(filename, content, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function slugify(text) {
+            return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'dashboard';
+        }
+
+        function downloadSpecJson() {
+            const normalized = dashboardNormalizeSpec(spec);
+            downloadFile(`${slugify(normalized.title)}-spec.json`, JSON.stringify(normalized, null, 2), 'application/json;charset=utf-8;');
+        }
+
+        function safeJson(value) {
+            return JSON.stringify(value)
+                .replace(/</g, "\\u003c")
+                .replace(/\u2028/g, "\\u2028")
+                .replace(/\u2029/g, "\\u2029");
+        }
+
+        function clearAccent() {
+            spec.accent = null;
+            document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+            refresh(false);
+            renderPalettePreview();
+        }
+
+        function renderPalettePreview() {
+            const host = document.getElementById('palette-preview');
+            host.textContent = '';
+            for (const colour of dashboardPaletteFor(spec).slice(0, 8)) {
+                const chip = document.createElement('span');
+                chip.className = 'h-4 flex-1 rounded';
+                chip.style.background = colour;
+                chip.title = colour;
+                host.appendChild(chip);
+            }
+        }
+
+        const DATASET_KEY = 'dashboardBuilderDataset';
+
+        function rememberDataset() {
+            try {
+                if (!dataset) {
+                    sessionStorage.removeItem(DATASET_KEY);
+                    return;
+                }
+                sessionStorage.setItem(DATASET_KEY, JSON.stringify({
+                    source: dataset.source,
+                    columns: dataset.columns,
+                    rows: dataset.rows,
+                    dateColumn: dataset.dateColumn,
+                    sheetUrl: dataset.sheetUrl || null
+                }));
+            } catch (e) {
+                sessionStorage.removeItem(DATASET_KEY);
+            }
+        }
+
+        function restoreDataset() {
+            let raw = null;
+            try {
+                raw = sessionStorage.getItem(DATASET_KEY);
+            } catch (e) {
+                return false;
+            }
+            if (!raw) return false;
+
+            try {
+                const saved = JSON.parse(raw);
+                if (!saved || !Array.isArray(saved.rows) || saved.rows.length === 0) return false;
+
+                dataset = classifyDataset({ columns: saved.columns, rows: saved.rows }, saved.source || 'your file');
+                if (saved.dateColumn) dataset.dateColumn = saved.dateColumn;
+                if (saved.sheetUrl) dataset.sheetUrl = saved.sheetUrl;
+
+                document.getElementById('data-status').textContent =
+                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns (still loaded)`;
+                document.getElementById('clear-data').classList.remove('hidden');
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function adoptHandoff() {
+            let raw = null;
+            try {
+                raw = sessionStorage.getItem('dashboardHandoff');
+                sessionStorage.removeItem('dashboardHandoff');
+            } catch (e) {
+                return false;
+            }
+            if (!raw) return false;
+
+            try {
+                const handed = JSON.parse(raw);
+                if (!handed || !Array.isArray(handed.rows) || handed.rows.length === 0) return false;
+
+                dataset = classifyDataset({ columns: handed.columns, rows: handed.rows }, handed.source || 'the dashboard you came from');
+                if (handed.dateColumn) dataset.dateColumn = handed.dateColumn;
+
+                document.getElementById('data-status').textContent =
+                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns, carried over from the dashboard you were viewing`;
+                document.getElementById('clear-data').classList.remove('hidden');
+                rememberDataset();
+                return true;
+            } catch (e) {
+                document.getElementById('data-status').textContent =
+                    'The dashboard you came from could not hand its data over, so load the file again to see real numbers.';
+                return false;
+            }
+        }
+
+        function builderUrl() {
+            return window.location.href.replace(/[?#].*$/, '');
+        }
+
+        function standaloneBoot(normalized, baked, live) {
+            const specJson = safeJson(normalized);
+            const bakedJson = safeJson(baked);
+
+            const lines = [
+                `var SPEC = dashboardNormalizeSpec(${specJson});`,
+                `var SNAPSHOT = ${bakedJson};`,
+                `var BUILDER = ${safeJson(builderUrl())};`,
+                'var HOST = document.getElementById("dashboard");',
+                'var DATASET = SNAPSHOT;',
+                'dashboardRenderSpec(SPEC, HOST, { dataset: DATASET });'
+            ];
+
+            if (live) {
+                lines.push(
+                    'fetchGoogleSheet(SPEC.source.url).then(function (parsed) {',
+                    '  var profiles = profileDataset(parsed.columns, parsed.rows);',
+                    '  var dateProfile = profiles.filter(function (p) { return p.type === "date"; })[0];',
+                    '  DATASET = {',
+                    '    source: "the connected Google Sheet",',
+                    '    columns: parsed.columns,',
+                    '    rows: parsed.rows,',
+                    '    rowCount: parsed.rows.length,',
+                    '    dateColumn: dateProfile ? dateProfile.name : null,',
+                    '    selections: {}',
+                    '  };',
+                    '  dashboardRenderSpec(SPEC, HOST, { dataset: DATASET });',
+                    '}).catch(function () {});'
+                );
+            }
+
+            if (normalized.showEditLink !== false) {
+                lines.push(
+                    'var bar = document.createElement("div");',
+                    'bar.className = "max-w-6xl mx-auto px-6 pb-8 text-right";',
+                    'var edit = document.createElement("a");',
+                    'edit.className = "text-[11px] text-slate-400 hover:text-[#0062F1] font-medium";',
+                    'edit.textContent = "Edit this dashboard";',
+                    'edit.href = BUILDER + "#" + dashboardEncodeSpec(SPEC);',
+                    'edit.addEventListener("click", function () {',
+                    '  try {',
+                    '    if (DATASET && DATASET.rows && DATASET.rows.length) {',
+                    '      sessionStorage.setItem("dashboardHandoff", JSON.stringify({',
+                    '        source: DATASET.source, columns: DATASET.columns, rows: DATASET.rows, dateColumn: DATASET.dateColumn',
+                    '      }));',
+                    '    }',
+                    '  } catch (e) {}',
+                    '});',
+                    'bar.appendChild(edit);',
+                    'document.body.appendChild(bar);'
+                );
+            }
+
+            return lines.join('\n');
+        }
+
+        let workspaceEntryId = null;
+
+        async function saveToWorkspace() {
+            const built = dashboardNormalizeSpec(spec);
+            const state = document.getElementById('save-state');
+
+            if (!built.visuals || built.visuals.length === 0) {
+                showToast('Add at least one visual before saving.', 'error');
+                return;
+            }
+
+            let baked = '';
+            if (dataset) {
+                try {
+                    const payload = dashboardBakeDataset(built, dataset);
+                    const text = JSON.stringify(payload);
+                    if (text.length <= 400000) baked = text;
+                } catch (err) {
+                    baked = '';
+                }
+            }
+
+            const result = workspaceSave({
+                id: workspaceEntryId,
+                title: built.title,
+                subtitle: built.subtitle,
+                owner: built.requester,
+                audience: built.audience,
+                refresh: built.refresh,
+                source: built.source ? built.source.kind : '',
+                visuals: built.visuals.length,
+                spec: dashboardEncodeSpec(built),
+                baked: baked
+            });
+
+            if (!result.ok) {
+                showToast(result.reason, 'error');
+                return;
+            }
+
+            workspaceEntryId = result.id;
+            if (state) state.innerText = result.replaced ? 'Updated in Dashboards' : 'Saved to Dashboards';
+            showToast(result.replaced ? 'Dashboard updated in your workspace.' : 'Dashboard saved to your workspace.');
+        }
+
+        function metaAttr(value) {
+            return String(value === null || value === undefined ? '' : value)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function workspaceMetaTags(built) {
+            return [
+                `<meta name="dashboard-title" content="${metaAttr(built.title)}">`,
+                `<meta name="dashboard-subtitle" content="${metaAttr(built.subtitle)}">`,
+                `<meta name="dashboard-owner" content="${metaAttr(built.requester)}">`,
+                `<meta name="dashboard-audience" content="${metaAttr(built.audience)}">`,
+                `<meta name="dashboard-refresh" content="${metaAttr(built.refresh)}">`,
+                `<meta name="dashboard-built" content="${new Date().toISOString().slice(0, 10)}">`
+            ].join('\n');
+        }
+
+        async function downloadStandalone() {
+            const built = dashboardNormalizeSpec(spec);
+            try {
+                const live = built.source && built.source.kind === 'googleSheet';
+                const sources = await Promise.all([
+                    fetch('../shared/dashboard-spec.js').then((r) => r.text()),
+                    fetch('../shared/dashboard-data.js').then((r) => r.text()),
+                    fetch('../shared/dashboard-render.js').then((r) => r.text()),
+                    dataset ? fetch('../shared/profile.js').then((r) => r.text()) : Promise.resolve(''),
+                    live ? fetch('../shared/parse.js').then((r) => r.text()) : Promise.resolve(''),
+                    live ? fetch('../shared/sheet-connect.js').then((r) => r.text()) : Promise.resolve(''),
+                    fetch('../../tailwind.css').then((r) => r.text())
+                ]);
+
+                const baked = dataset ? dashboardBakeDataset(built, dataset) : null;
+                const title = built.title.replace(/[<>]/g, '');
+
+                const html = [
+                    '<!DOCTYPE html>',
+                    '<html lang="en"><head><meta charset="UTF-8">',
+                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                    `<title>${title}</title>`,
+                    workspaceMetaTags(built),
+                    `<style>${sources[6]}</style>`,
+                    '<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>',
+                    '<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">',
+                    '<style>h1,h2{font-family:\'Lora\',Georgia,serif;}</style>',
+                    '</head><body class="bg-slate-50 text-slate-900 font-sans">',
+                    '<main class="max-w-6xl mx-auto p-6"><div id="dashboard"></div></main>',
+                    sources[4] ? `<script>${sources[4]}<\/script>` : '',
+                    sources[5] ? `<script>${sources[5]}<\/script>` : '',
+                    sources[3] ? `<script>${sources[3]}<\/script>` : '',
+                    `<script>${sources[0]}<\/script>`,
+                    `<script>${sources[1]}<\/script>`,
+                    `<script>${sources[2]}<\/script>`,
+                    `<script>${standaloneBoot(built, baked, live)}<\/script>`,
+                    '</body></html>'
+                ].filter(Boolean).join('\n');
+
+                downloadFile(`${slugify(built.title)}.html`, html, 'text/html;charset=utf-8;');
+
+                const kb = Math.round(html.length / 1024);
+                if (!dataset) showToast(`Dashboard built (${kb} KB), using placeholder numbers.`);
+                else if (baked.interactive) showToast(`Dashboard built (${kb} KB) with ${baked.rows.length.toLocaleString()} rows so the slicers work.`);
+                else showToast(`Dashboard built (${kb} KB) with your data baked in.`);
+            } catch (err) {
+                showToast('Could not build the file: ' + err.message, 'error');
+            }
+        }
+
+        function resetSpec() {
+            spec = dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
+            nextId = 1;
+            openVisual = null;
+            openAdvanced.clear();
+            document.getElementById('meta-title').value = '';
+            document.getElementById('meta-subtitle').value = '';
+            refresh();
+        }
+
+        function init() {
+            fillSelect(document.getElementById('meta-refresh'), ['real time', 'hourly', 'daily', 'weekly', 'monthly'], 'daily');
+
+            const addButtons = document.getElementById('add-buttons');
+            for (const kind of Object.keys(DASHBOARD_VISUAL_KINDS)) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'text-xs border border-slate-300 text-slate-700 hover:border-[#0062F1] hover:text-[#0062F1] rounded-lg px-3 py-1.5 transition-colors';
+                button.textContent = `+ ${DASHBOARD_VISUAL_KINDS[kind].label}`;
+                button.addEventListener('click', () => addVisual(kind));
+                addButtons.appendChild(button);
+            }
+
+            spec = dashboardDecodeSpec(window.location.hash) || dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
+            nextId = spec.visuals.length + 1;
+
+            if (!adoptHandoff()) restoreDataset();
+
+            document.getElementById('meta-title').value = spec.title === 'Untitled dashboard' ? '' : spec.title;
+            document.getElementById('meta-subtitle').value = spec.subtitle;
+            document.getElementById('meta-requester').value = spec.requester;
+            document.getElementById('meta-audience').value = spec.audience;
+            document.getElementById('meta-refresh').value = spec.refresh;
+            document.getElementById('opt-captions').checked = spec.showCaptions !== false;
+            document.getElementById('opt-deltas').checked = spec.showDeltas !== false;
+            document.getElementById('opt-edit').checked = spec.showEditLink !== false;
+
+            fillSelect(document.getElementById('opt-palette'), DASHBOARD_PALETTE_NAMES, spec.palette,
+                (n) => n.charAt(0).toUpperCase() + n.slice(1));
+            document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+
+            if (spec.subtitle || spec.requester || spec.audience || !spec.showCaptions || !spec.showDeltas || !spec.showEditLink || spec.palette !== 'hub' || spec.accent) toggleDetails();
+
+            const bind = (id, key) => {
+                const el = document.getElementById(id);
+                el.addEventListener('input', () => { spec[key] = el.value; refresh(false); });
+                el.addEventListener('change', () => { spec[key] = el.value; refresh(false); });
+            };
+
+            bind('meta-title', 'title');
+            bind('meta-subtitle', 'subtitle');
+            bind('meta-requester', 'requester');
+            bind('meta-audience', 'audience');
+            bind('meta-refresh', 'refresh');
+
+            const bindToggle = (id, key) => {
+                const el = document.getElementById(id);
+                el.addEventListener('change', () => { spec[key] = el.checked; refresh(false); });
+            };
+
+            bindToggle('opt-captions', 'showCaptions');
+            bindToggle('opt-deltas', 'showDeltas');
+            bindToggle('opt-edit', 'showEditLink');
+
+            document.getElementById('opt-palette').addEventListener('change', (e) => {
+                spec.palette = e.target.value;
+                spec.accent = null;
+                document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+                refresh(false);
+                renderPalettePreview();
+            });
+            document.getElementById('opt-accent').addEventListener('input', (e) => {
+                spec.accent = e.target.value;
+                refresh(false);
+                renderPalettePreview();
+            });
+
+            renderPalettePreview();
+
+            refresh();
+        }
+
+        init();
+</script>
+    <script src="../shared/definitions-data.js"></script>
+    <script src="../shared/definitions.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        function dashboardBuildAction() {
+            const HELP_SHAPE = /^\s*(how|what|why|where|when|who|which|is|are|was|does|do|did|can i|could i|should i|explain|tell me|remind me)\b/i;
+            const BUILD_VERBS = /\b(build|create|make|add|put|draw|plot|chart|graph|give me|show me|i want|i need|set ?up|design)\b/i;
+            const FROM_FILE = /\b(from (the|this|my) (file|data|sheet|csv|spreadsheet)|from what is loaded|whatever is loaded|the loaded (file|data))\b/i;
+            const FILE_SAYS = /\b(the (file|sheet) (says|describes|lists|asks)|as described in the (file|data|sheet)|use the (instructions|descriptions) in the (file|sheet|data))\b/i;
+
+            function catalogue() {
+                return dataset || { columns: [], measureColumns: [], dimensionColumns: [], dateColumn: null };
+            }
+
+            function describe(result) {
+                const lines = [];
+                for (const visual of result.visuals) lines.push(`${visual.title} (${visual.kind})`);
+                for (const slicer of result.slicers) lines.push(`Slicer on ${slicer.label}`);
+                return lines;
+            }
+
+            function apply(result) {
+                for (const visual of result.visuals) {
+                    visual.id = makeId();
+                    spec.visuals.push(dashboardNormalizeVisual(visual, spec.visuals.length));
+                }
+                for (const slicer of result.slicers) {
+                    slicer.id = `s${spec.slicers.length + 1}`;
+                    spec.slicers.push(slicer);
+                }
+
+                openVisual = null;
+                refresh();
+
+                const built = [];
+                if (result.visuals.length) built.push(`${result.visuals.length} visual${result.visuals.length === 1 ? '' : 's'}`);
+                if (result.slicers.length) built.push(`${result.slicers.length} slicer${result.slicers.length === 1 ? '' : 's'}`);
+
+                const tail = result.unmatched.length
+                    ? ` I could not work out: ${result.unmatched.join('; ')}.`
+                    : '';
+
+                return `Added ${built.join(' and ')}.${tail} Everything is editable below, and nothing leaves this tab until you download or save it.`;
+            }
+
+            function planFromData() {
+                if (!dataset) return '';
+                const measure = dataset.measureColumns[0];
+                const dims = dataset.dimensionColumns.slice(0, 2);
+                const parts = [];
+
+                if (measure) parts.push(`total ${measure}`);
+                if (measure && dims[0]) parts.push(`${measure} by ${dims[0]}`);
+                if (measure && dataset.dateColumn) parts.push(`${measure} over time`);
+                if (!measure && dims[0]) parts.push(`count by ${dims[0]}`);
+                if (dims[1]) parts.push(`let me filter by ${dims[1]}`);
+
+                return parts.join(', ');
+            }
+
+            function instructionsFromFile() {
+                if (!dataset || !dataset.rows) return '';
+                const found = [];
+                const limit = Math.min(dataset.rows.length, 200);
+
+                for (let i = 0; i < limit; i++) {
+                    for (const column of dataset.columns) {
+                        const raw = dataset.rows[i][column];
+                        const cell = String(raw === null || raw === undefined ? '' : raw).trim();
+                        if (cell.length < 6 || cell.length > 160) continue;
+                        if (!BUILD_VERBS.test(cell) && !/\bby\b/i.test(cell)) continue;
+                        if (found.indexOf(cell) === -1) found.push(cell);
+                        if (found.length >= 12) return found.join('\n');
+                    }
+                }
+
+                return found.join('\n');
+            }
+
+            return {
+                match(question) {
+                    const q = String(question || '').trim();
+                    if (q === '') return false;
+                    if (HELP_SHAPE.test(q)) return false;
+                    return BUILD_VERBS.test(q) || FROM_FILE.test(q) || /\bby\b/i.test(q);
+                },
+
+                run(question) {
+                    if (FILE_SAYS.test(question)) {
+                        if (!dataset) return 'There is no file loaded, so there is nothing for me to read. Load one under "Your data" and ask me again.';
+
+                        const text = instructionsFromFile();
+                        if (text === '') return 'I read the loaded file and found nothing in it that reads like a dashboard instruction.';
+
+                        const result = parseDashboardInstructions(text, catalogue());
+                        if (result.visuals.length === 0 && result.slicers.length === 0) {
+                            return 'I found some instruction-looking text in the file but could not turn any of it into a visual.';
+                        }
+
+                        return vanessaPropose(
+                            'These came out of the loaded file rather than from you, so read them before I add anything:',
+                            describe(result),
+                            'Add them',
+                            () => apply(result)
+                        );
+                    }
+
+                    const typed = parseDashboardInstructions(question, catalogue());
+
+                    if (FROM_FILE.test(question) && typed.visuals.length === 0) {
+                        if (!dataset) return 'Load a file or connect a sheet first, and I will shape a dashboard around whatever is in it.';
+
+                        const planned = parseDashboardInstructions(planFromData(), catalogue());
+                        if (planned.visuals.length === 0 && planned.slicers.length === 0) {
+                            return 'I looked at the loaded file but could not find a number or a category worth building around.';
+                        }
+
+                        return vanessaPropose(
+                            `Based on what is in ${dataset.source}, I would start with:`,
+                            describe(planned),
+                            'Build it',
+                            () => apply(planned)
+                        );
+                    }
+
+                    if (typed.visuals.length === 0 && typed.slicers.length === 0) return null;
+
+                    const summary = dataset
+                        ? 'Here is what I would add:'
+                        : 'Here is what I would add. No file is loaded, so these will show placeholder figures until you load one:';
+
+                    return vanessaPropose(summary, describe(typed), 'Add them', () => apply(typed));
+                }
+            };
+        }
+
+        vanessaInit({
+            tool: 'dashboard-builder',
+            getDataset: () => dataset,
+            actions: [dashboardBuildAction()]
+        });
+        definitionsInit({ tool: 'dashboard-builder' });
+</script>
+    <script src="../shared/catalog.js"></script>
+    <script src="../shared/resilience.js"></script>
+    <script src="../shared/access.js"></script>
+    <script src="../shared/access-ui.js"></script>
+    <script src="../shared/artifacts.js"></script>
+    <script src="../shared/project-service.js"></script>
+    <script src="../shared/operations.js"></script>
+    <script src="../shared/platform.js"></script>
+</body>
+</html>

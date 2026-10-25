@@ -1,0 +1,383 @@
+function dashboardCellIsBlank(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "number") return Number.isNaN(value);
+  if (typeof value === "string") return value.trim() === "";
+  return false;
+}
+
+function dashboardCellNumber(value) {
+  if (dashboardCellIsBlank(value)) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return null;
+  const s = String(value).trim().replace(/,/g, "");
+  if (!/^[+-]?\$?(\d+\.?\d*|\.\d+)%?$/.test(s)) return null;
+  const n = Number(s.replace(/[$%]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function dashboardCellText(value) {
+  if (dashboardCellIsBlank(value)) return "(blank)";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).trim();
+}
+
+function dashboardCellDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof profileToDate === "function") return profileToDate(value);
+  return null;
+}
+
+function dashboardMatchesFilter(row, filter) {
+  const raw = row[filter.field];
+  const text = dashboardCellText(raw).toLowerCase();
+  const target = String(filter.value == null ? "" : filter.value).trim().toLowerCase();
+  const num = dashboardCellNumber(raw);
+  const targetNum = Number(String(filter.value).replace(/[$,%\s]/g, ""));
+
+  if (filter.op === "equals") return text === target;
+  if (filter.op === "not equals") return text !== target;
+  if (filter.op === "contains") return text.includes(target);
+  if (filter.op === "in list") {
+    return target.split(/[,;|]/).map((v) => v.trim()).filter(Boolean).includes(text);
+  }
+  if (filter.op === "greater than") return num !== null && Number.isFinite(targetNum) && num > targetNum;
+  if (filter.op === "less than") return num !== null && Number.isFinite(targetNum) && num < targetNum;
+  return true;
+}
+
+const DASHBOARD_INCLUSIVE_OPERATORS = new Set(["equals", "contains", "in list"]);
+
+function dashboardApplyFilters(rows, filters) {
+  if (!filters || filters.length === 0) return rows;
+  const usable = filters.filter((f) => f && f.field);
+  if (usable.length === 0) return rows;
+
+  const groups = new Map();
+  for (const filter of usable) {
+    const inclusive = DASHBOARD_INCLUSIVE_OPERATORS.has(filter.op);
+    const key = inclusive ? `any:${filter.field}` : `all:${filter.field}:${filter.op}`;
+    if (!groups.has(key)) groups.set(key, { inclusive, filters: [] });
+    groups.get(key).filters.push(filter);
+  }
+
+  const clauses = Array.from(groups.values());
+
+  return rows.filter((row) => clauses.every((clause) => (clause.inclusive
+    ? clause.filters.some((f) => dashboardMatchesFilter(row, f))
+    : clause.filters.every((f) => dashboardMatchesFilter(row, f)))));
+}
+
+function dashboardAggregate(rows, measure, aggregation) {
+  if (aggregation === "count") {
+    let present = 0;
+    for (const row of rows) {
+      if (!dashboardCellIsBlank(row[measure])) present++;
+    }
+    return present;
+  }
+
+  if (aggregation === "distinct count") {
+    const seen = new Set();
+    for (const row of rows) {
+      if (!dashboardCellIsBlank(row[measure])) seen.add(dashboardCellText(row[measure]));
+    }
+    return seen.size;
+  }
+
+  const numbers = [];
+  for (const row of rows) {
+    const n = dashboardCellNumber(row[measure]);
+    if (n !== null) numbers.push(n);
+  }
+
+  if (numbers.length === 0) return 0;
+  if (aggregation === "average") return numbers.reduce((a, b) => a + b, 0) / numbers.length;
+  if (aggregation === "min") return Math.min(...numbers);
+  if (aggregation === "max") return Math.max(...numbers);
+  return numbers.reduce((a, b) => a + b, 0);
+}
+
+function dashboardRawValue(scopedRows, definition, depth) {
+  const numerator = dashboardAggregate(
+    dashboardApplyFilters(scopedRows, definition.filters),
+    definition.measure,
+    definition.aggregation
+  );
+
+  if (!definition.divideBy || depth >= 4) return numerator;
+
+  const denominator = dashboardRawValue(scopedRows, definition.divideBy, depth + 1);
+  if (!denominator) return 0;
+
+  const ratio = numerator / denominator;
+  return Number.isFinite(ratio) ? ratio : 0;
+}
+
+function dashboardComputeValue(scopedRows, binding) {
+  const raw = dashboardRawValue(scopedRows, binding, 0);
+  if (!binding.divideBy) return raw;
+  return dashboardBindingFormat(binding) === "percent" ? raw * 100 : raw;
+}
+
+function dashboardPeriodKey(date, grain) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+
+  if (grain === "year") return String(y);
+  if (grain === "quarter") return `${y} Q${Math.floor(m / 3) + 1}`;
+  if (grain === "month") return `${y}-${String(m + 1).padStart(2, "0")}`;
+  if (grain === "week") {
+    const start = new Date(Date.UTC(y, m, date.getUTCDate() - date.getUTCDay()));
+    return start.toISOString().slice(0, 10);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function dashboardFindDateColumn(rows, columns) {
+  for (const column of columns) {
+    let parsed = 0;
+    let present = 0;
+    for (const row of rows.slice(0, 200)) {
+      if (dashboardCellIsBlank(row[column])) continue;
+      present++;
+      if (dashboardCellDate(row[column])) parsed++;
+    }
+    if (present > 0 && parsed / present >= 0.9) return column;
+  }
+  return null;
+}
+
+function dashboardGroupSeries(rows, dimension, binding, limit) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const key = dashboardCellText(row[dimension]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  const series = Array.from(groups.entries())
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }))
+    .sort((a, b) => b.value - a.value);
+
+  if (series.length <= limit) return series;
+  if (binding.divideBy) return series.slice(0, limit);
+
+  const top = series.slice(0, limit - 1);
+  const restRows = series.slice(limit - 1);
+  const rest = restRows.reduce((s, r) => s + r.value, 0);
+  top.push({ label: `Other (${restRows.length})`, value: rest });
+  return top;
+}
+
+function dashboardTimeSeries(rows, dateColumn, binding, grain) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const date = dashboardCellDate(row[dateColumn]);
+    if (!date) continue;
+    const key = dashboardPeriodKey(date, grain);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }));
+}
+
+function dashboardSlicerOptions(rows, slicer) {
+  if (slicer.type === "range" || slicer.type === "date range") {
+    const values = [];
+    for (const row of rows) {
+      const v = slicer.type === "range" ? dashboardCellNumber(row[slicer.field]) : dashboardCellDate(row[slicer.field]);
+      if (v !== null) values.push(slicer.type === "range" ? v : v.getTime());
+    }
+    if (values.length === 0) return { min: 0, max: 0, empty: true };
+    return { min: Math.min(...values), max: Math.max(...values), empty: false };
+  }
+
+  const seen = new Set();
+  for (const row of rows) {
+    if (!dashboardCellIsBlank(row[slicer.field])) seen.add(dashboardCellText(row[slicer.field]));
+    if (seen.size > 200) break;
+  }
+  return { values: Array.from(seen).sort(), empty: seen.size === 0 };
+}
+
+function dashboardApplySlicers(rows, slicers, selections) {
+  if (!slicers || slicers.length === 0 || !selections) return rows;
+
+  let out = rows;
+  for (const slicer of slicers) {
+    const chosen = selections[slicer.id];
+    if (chosen === undefined || chosen === null || chosen === "") continue;
+
+    if (slicer.type === "range") {
+      out = out.filter((row) => {
+        const n = dashboardCellNumber(row[slicer.field]);
+        return n !== null && n >= chosen.min && n <= chosen.max;
+      });
+    } else if (slicer.type === "date range") {
+      out = out.filter((row) => {
+        const d = dashboardCellDate(row[slicer.field]);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= chosen.min && t <= chosen.max;
+      });
+    } else if (Array.isArray(chosen)) {
+      if (chosen.length === 0) continue;
+      const wanted = new Set(chosen);
+      out = out.filter((row) => wanted.has(dashboardCellText(row[slicer.field])));
+    } else {
+      out = out.filter((row) => dashboardCellText(row[slicer.field]) === chosen);
+    }
+  }
+
+  return out;
+}
+
+function dashboardResolveFromRows(visual, dataset) {
+  const binding = visual.binding;
+  const columns = dataset.columns || [];
+  const scoped = dashboardApplySlicers(dataset.rows || [], dataset.slicers, dataset.selections);
+  const rows = dashboardApplyFilters(scoped, binding.filters);
+
+  if (visual.kind === "kpi") {
+    const value = dashboardComputeValue(scoped, binding);
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
+    let delta = 0;
+
+    if (dateColumn) {
+      const series = dashboardTimeSeries(scoped, dateColumn, binding, "month");
+      if (series.length >= 2) {
+        const last = series[series.length - 1].value;
+        const prior = series[series.length - 2].value;
+        if (prior !== 0) delta = (last - prior) / Math.abs(prior);
+      }
+    }
+
+    return { kind: "kpi", value, delta };
+  }
+
+  if (visual.kind === "trend") {
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
+    if (!dateColumn) return { kind: "series", points: [], empty: "No date column was found in this file." };
+    const points = dashboardTimeSeries(scoped, dateColumn, binding, binding.grain);
+    return { kind: "series", points, empty: points.length === 0 ? "No rows had a readable date." : null };
+  }
+
+  if (visual.kind === "details") {
+    const chosen = (binding.columns && binding.columns.length ? binding.columns : columns).filter((c) => columns.includes(c));
+    if (chosen.length === 0) {
+      return { kind: "rows", columns: [], rows: [], empty: "Pick at least one column to show." };
+    }
+
+    let listed = rows;
+    if (binding.sort !== "none" && binding.sortBy && columns.includes(binding.sortBy)) {
+      const direction = binding.sort === "ascending" ? 1 : -1;
+      listed = rows.slice().sort((a, b) => {
+        const x = dashboardCellNumber(a[binding.sortBy]);
+        const y = dashboardCellNumber(b[binding.sortBy]);
+        if (x !== null && y !== null) return (x - y) * direction;
+        return dashboardCellText(a[binding.sortBy]).localeCompare(dashboardCellText(b[binding.sortBy])) * direction;
+      });
+    }
+
+    return {
+      kind: "rows",
+      columns: chosen,
+      rows: listed.slice(0, binding.limit),
+      total: listed.length,
+      empty: listed.length === 0 ? "No rows matched the filters." : null
+    };
+  }
+
+  if (visual.kind === "scatter") {
+    const points = [];
+    for (const row of rows) {
+      const x = dashboardCellNumber(row[binding.measure]);
+      const y = dashboardCellNumber(row[binding.measure2]);
+      if (x !== null && y !== null) points.push({ x, y });
+      if (points.length >= 3000) break;
+    }
+    return { kind: "points", points, empty: points.length === 0 ? "No rows had numbers in both columns." : null };
+  }
+
+  if (!columns.includes(binding.dimension)) {
+    return { kind: "series", points: [], empty: `Column "${binding.dimension}" is not in this file.` };
+  }
+
+  const limit = visual.kind === "donut" ? Math.min(binding.limit, 6) : binding.limit;
+  const points = dashboardGroupSeries(binding.divideBy ? scoped : rows, binding.dimension, binding, limit);
+  return { kind: "series", points, empty: points.length === 0 ? "No rows matched the filters." : null };
+}
+
+function dashboardResolveVisual(visual, dataset) {
+  if (!dataset) return dashboardResolveSample(visual);
+  if (Array.isArray(dataset.rows) && dataset.rows.length > 0) return dashboardResolveFromRows(visual, dataset);
+  if (dataset.baked && dataset.baked[visual.id]) return dataset.baked[visual.id];
+  return dashboardResolveSample(visual);
+}
+
+function dashboardSpecVisuals(spec) {
+  if (typeof dashboardEffectiveBinding !== "function") return spec.visuals;
+  return spec.visuals.map((v) => Object.assign({}, v, { binding: dashboardEffectiveBinding(v, spec) }));
+}
+
+function dashboardSpecColumns(spec, dataset) {
+  const wanted = new Set();
+
+  for (const slicer of spec.slicers) wanted.add(slicer.field);
+  for (const visual of dashboardSpecVisuals(spec)) {
+    wanted.add(visual.binding.measure);
+    if (visual.binding.dimension) wanted.add(visual.binding.dimension);
+    if (visual.binding.measure2) wanted.add(visual.binding.measure2);
+    if (visual.binding.columns) for (const c of visual.binding.columns) wanted.add(c);
+    if (visual.binding.sortBy) wanted.add(visual.binding.sortBy);
+    for (const filter of visual.binding.filters) wanted.add(filter.field);
+    let divisor = visual.binding.divideBy;
+    let guard = 0;
+    while (divisor && guard < 5) {
+      wanted.add(divisor.measure);
+      for (const filter of divisor.filters) wanted.add(filter.field);
+      divisor = divisor.divideBy;
+      guard++;
+    }
+  }
+  if (dataset && dataset.dateColumn) wanted.add(dataset.dateColumn);
+
+  const columns = (dataset && dataset.columns) || [];
+  return columns.filter((c) => wanted.has(c));
+}
+
+function dashboardBakeDataset(spec, dataset, maxRows = 50000) {
+  const base = {
+    source: dataset.source || "",
+    rowCount: (dataset.rows || []).length,
+    bakedAt: new Date().toISOString().slice(0, 10)
+  };
+
+  if (spec.slicers.length === 0) {
+    const baked = {};
+    for (const visual of dashboardSpecVisuals(spec)) baked[visual.id] = dashboardResolveFromRows(visual, dataset);
+    return Object.assign(base, { baked, interactive: false });
+  }
+
+  const columns = spec.showEditLink === false
+    ? dashboardSpecColumns(spec, dataset)
+    : (dataset.columns || []).slice();
+  const rows = (dataset.rows || []).slice(0, maxRows).map((row) => {
+    const out = {};
+    for (const column of columns) out[column] = row[column] === undefined ? null : row[column];
+    return out;
+  });
+
+  return Object.assign(base, {
+    interactive: true,
+    columns,
+    rows,
+    dateColumn: dataset.dateColumn,
+    truncated: (dataset.rows || []).length > maxRows
+  });
+}

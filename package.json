@@ -1,0 +1,14 @@
+{
+  "name": "signal-noir",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/serve.mjs --production",
+    "lint": "node scripts/check.mjs",
+    "test": "python3 server/tests/test_queries.py"
+  }
+}

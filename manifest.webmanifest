@@ -1,0 +1,44 @@
+{
+  "name": "Signal Noir",
+  "short_name": "Signal Noir",
+  "description": "A local-first analytics workspace: give Vanessa your data and a question, and get answers, dashboards, reports and decisions you can audit.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "./index.html",
+  "lang": "en-US",
+  "categories": ["productivity", "business", "utilities"],
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#080A0F",
+  "theme_color": "#080A0F",
+  "shortcuts": [
+    {
+      "name": "Ask Vanessa",
+      "short_name": "Vanessa",
+      "url": "./index.html#ask"
+    },
+    {
+      "name": "Open Signal Noir Studio",
+      "short_name": "Studio",
+      "url": "./tools/studio/index.html"
+    },
+    {
+      "name": "Browse the tools",
+      "short_name": "Tools",
+      "url": "./tools/index.html"
+    },
+    {
+      "name": "Library",
+      "short_name": "Library",
+      "url": "./library.html"
+    }
+  ],
+  "icons": [
+    {
+      "src": "signal-noir-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

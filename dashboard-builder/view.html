@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Preview — Signal Noir</title>
+    <link rel="stylesheet" href="../../tailwind.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        h1, h2 { font-family: 'Lora', Georgia, serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #ffffff; }
+        }
+    </style>
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <link rel="stylesheet" href="../shared/design-system.css">
+    <link rel="stylesheet" href="../shared/platform.css">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <header class="no-print border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h2 class="text-lg font-semibold text-[#00133C]">Dashboard Preview</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="window.print()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Print / PDF</button>
+            <a id="edit-link" href="index.html" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Edit this dashboard</a>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6">
+        <div id="empty-state" class="hidden bg-white border border-slate-200 rounded-xl p-10 text-center">
+            <h1 class="text-xl font-semibold text-[#00133C]">Nothing to show</h1>
+            <p class="text-sm text-slate-600 mt-2 max-w-md mx-auto">
+                This page builds a dashboard from a spec carried in the link itself. The link you opened
+                has no spec attached, or the spec could not be read.
+            </p>
+            <a href="index.html" class="inline-block mt-5 bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                Build a dashboard request
+            </a>
+        </div>
+
+        <div id="data-prompt" class="hidden no-print bg-white border border-dashed border-slate-300 rounded-xl p-4 mb-4">
+            <div class="flex flex-wrap items-center gap-3 justify-between">
+                <div>
+                    <p class="text-sm font-medium text-[#00133C]">Attach your data</p>
+                    <p id="data-prompt-detail" class="text-xs text-slate-600 mt-0.5"></p>
+                </div>
+                <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="text-xs text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
+            </div>
+            <p id="data-status" class="text-xs text-slate-500 mt-2"></p>
+        </div>
+
+        <div id="dashboard"></div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/sheet-connect.js"></script>
+    <script src="../shared/dashboard-spec.js"></script>
+    <script src="../shared/dashboard-data.js"></script>
+    <script src="../shared/dashboard-render.js"></script>
+    <script>
+        let spec = null;
+        let dataset = null;
+        let charts = [];
+
+        function neededColumns() {
+            const wanted = new Set();
+            for (const slicer of spec.slicers) wanted.add(slicer.field);
+            for (const visual of spec.visuals) {
+                wanted.add(visual.binding.measure);
+                if (visual.binding.dimension) wanted.add(visual.binding.dimension);
+                if (visual.binding.measure2) wanted.add(visual.binding.measure2);
+            }
+            return Array.from(wanted).filter((c) => c && c !== 'Not specified');
+        }
+
+        function render() {
+            for (const chart of charts) chart.destroy();
+            charts = dashboardRenderSpec(spec, document.getElementById('dashboard'), { dataset });
+        }
+
+        document.getElementById('data-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading file...';
+
+            try {
+                const parsed = await parseFileToRows(file);
+                if (parsed.columns.length === 0) throw new Error('No readable columns found.');
+
+                const profiles = profileDataset(parsed.columns, parsed.rows);
+                const dateProfile = profiles.find((p) => p.type === 'date');
+                dataset = {
+                    source: file.name,
+                    columns: parsed.columns.slice(),
+                    rows: parsed.rows,
+                    rowCount: parsed.rows.length,
+                    dateColumn: dateProfile ? dateProfile.name : null,
+                    selections: {}
+                };
+
+                const missing = neededColumns().filter((c) => !parsed.columns.includes(c));
+                status.textContent = missing.length
+                    ? `${file.name} loaded, but these columns are missing: ${missing.join(', ')}`
+                    : `${file.name} — ${dataset.rowCount.toLocaleString()} rows.`;
+
+                render();
+            } catch (err) {
+                status.textContent = 'Could not read that file: ' + err.message;
+            }
+
+            e.target.value = '';
+        });
+
+        const SAVED_FIGURES_KEY = 'hub_dashboard_figures';
+
+        function takeSavedFigures() {
+            try {
+                const raw = sessionStorage.getItem(SAVED_FIGURES_KEY);
+                if (!raw) return null;
+                sessionStorage.removeItem(SAVED_FIGURES_KEY);
+
+                const parsed = JSON.parse(raw);
+                return parsed && parsed.baked ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function boot() {
+            spec = dashboardDecodeSpec(window.location.hash);
+            const empty = document.getElementById('empty-state');
+            const host = document.getElementById('dashboard');
+            const prompt = document.getElementById('data-prompt');
+
+            if (!spec) {
+                empty.classList.remove('hidden');
+                host.classList.add('hidden');
+                prompt.classList.add('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            host.classList.remove('hidden');
+            prompt.classList.remove('hidden');
+            document.title = `${spec.title} — Dashboard Preview`;
+            document.getElementById('edit-link').href = `index.html${window.location.hash}`;
+
+            const saved = takeSavedFigures();
+            if (saved) dataset = saved;
+
+            const columns = neededColumns();
+            if (dataset && dataset.baked) {
+                prompt.classList.add('hidden');
+            } else {
+                document.getElementById('data-prompt-detail').textContent = columns.length
+                    ? `This dashboard expects a file with: ${columns.join(', ')}. Until you attach one, the numbers below are placeholders.`
+                    : 'Attach a CSV or Excel file to see real numbers instead of placeholders.';
+            }
+
+            render();
+
+            if (spec.source && spec.source.kind === 'googleSheet') loadConnectedSheet();
+        }
+
+        async function loadConnectedSheet() {
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading the connected Google Sheet...';
+
+            try {
+                const parsed = await fetchGoogleSheet(spec.source.url);
+                const profiles = profileDataset(parsed.columns, parsed.rows);
+                const dateProfile = profiles.find((p) => p.type === 'date');
+
+                dataset = {
+                    source: 'the connected Google Sheet',
+                    columns: parsed.columns.slice(),
+                    rows: parsed.rows,
+                    rowCount: parsed.rows.length,
+                    dateColumn: dateProfile ? dateProfile.name : null,
+                    selections: {}
+                };
+
+                document.getElementById('data-prompt').classList.add('hidden');
+                render();
+            } catch (err) {
+                status.textContent = `${err.message} The numbers below are placeholders until it can be read, or you can attach a file instead.`;
+            }
+        }
+
+        window.addEventListener('hashchange', boot);
+        boot();
+</script>
+    <script src="../shared/catalog.js"></script>
+    <script src="../shared/resilience.js"></script>
+    <script src="../shared/access.js"></script>
+    <script src="../shared/access-ui.js"></script>
+    <script src="../shared/artifacts.js"></script>
+    <script src="../shared/project-service.js"></script>
+    <script src="../shared/operations.js"></script>
+    <script src="../shared/platform.js"></script>
+</body>
+</html>

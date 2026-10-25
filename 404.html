@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <meta name="robots" content="noindex">
+  <title>Page not found · Signal Noir</title>
+  
+  <link rel="icon" href="/signal-noir-icon.svg" type="image/svg+xml">
+  <script src="/tools/shared/theme.js"></script>
+  <link rel="stylesheet" href="/tools/shared/design-system.css">
+  <link rel="stylesheet" href="/site/site.css">
+</head>
+<body class="sn-app">
+  <main id="main" class="sn-container" style="display:grid;place-items:center;min-height:70vh;padding-block:56px">
+    <div style="max-width:560px;width:100%">
+      <span class="sn-eyebrow"><i></i>Not found</span>
+      <h1 class="sn-h1" style="margin:12px 0 10px">That page isn’t here</h1>
+      <p class="sn-lead">The link may be out of date, or the page may have been renamed. Nothing has happened to your work — every project is stored in this browser and is still there.</p>
+      <div class="sn-cluster" style="margin-top:24px">
+        <a class="sn-btn sn-btn-primary" href="/index.html">Go to the home page</a>
+        <a class="sn-btn" href="/tools/studio/index.html">Open Studio</a>
+        <button type="button" class="sn-btn sn-btn-ghost" data-sn-command>Search Signal Noir</button>
+      </div>
+      <div id="recent-work" hidden style="margin-top:32px">
+        <h2 class="sn-eyebrow" style="margin-bottom:12px">Pick up where you left off</h2>
+        <div class="list" id="recent-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/tools/shared/catalog.js"></script>
+  <script src="/tools/shared/projects-store.js"></script>
+  <script src="/tools/shared/resilience.js"></script>
+  <script src="/tools/shared/access.js"></script>
+  <script src="/tools/shared/access-ui.js"></script>
+  <script src="/tools/shared/artifacts.js"></script>
+  <script src="/tools/shared/project-service.js"></script>
+  <script src="/tools/shared/operations.js"></script>
+  <script src="/tools/shared/platform.js"></script>
+  <script>
+
+
+    (async () => {
+      const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
+      try {
+        const projects = window.SignalNoir.projectService.visible(await window.SignalNoir.projects.list(), { includeArchived: false }).slice(0, 4);
+        if (!projects.length) return;
+        document.getElementById("recent-list").innerHTML = projects.map(project => {
+          const summary = window.SignalNoir.projectService.summarize(project);
+          return `<button type="button" class="list-row" data-project="${esc(project.id)}"><span class="sn-card-icon" aria-hidden="true">▦</span><span style="min-width:0"><strong>${esc(project.name)}</strong><small>${esc([`${summary.counts.dataset} dataset${summary.counts.dataset === 1 ? "" : "s"}`, `${summary.counts.finding} finding${summary.counts.finding === 1 ? "" : "s"}`].join(" · "))}</small></span>${project.isDemo ? '<span class="sn-badge sn-badge-preview">Demo</span>' : ""}</button>`;
+        }).join("");
+        document.getElementById("recent-work").hidden = false;
+        document.getElementById("recent-list").addEventListener("click", event => {
+          const row = event.target.closest("[data-project]");
+          if (!row) return;
+          window.SignalNoir.platform.handoff.set({ openProject: row.dataset.project });
+          window.SignalNoir.platform.navigate(window.SignalNoir.platform.url("tools/studio/index.html"));
+        });
+      } catch (error) {                                         }
+    })();
+    document.querySelector("[data-sn-command]").addEventListener("click", () => window.SignalNoir.platform.openCommandCenter());
+</script>
+</body>
+</html>

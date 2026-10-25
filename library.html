@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <title>Library · Signal Noir</title>
+  <link rel="icon" href="signal-noir-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script src="tools/shared/theme.js"></script>
+  <link rel="stylesheet" href="tools/shared/design-system.css">
+  <link rel="stylesheet" href="site/site.css">
+</head>
+<body class="sn-app">
+  <main id="main" class="sn-container">
+    <header class="sn-page-head">
+      <span class="sn-eyebrow"><i></i>Library</span>
+      <h1 class="sn-h1">Everything you can reuse</h1>
+      <p class="sn-lead">Start from a proven template, or return to analyses, reports, dashboards and workflows your projects have produced. Everything listed here is stored in this browser.</p>
+    </header>
+    <div class="sn-tabs page-tabs" role="tablist" aria-label="Library sections" id="library-tabs"></div>
+    <div id="library-panel" role="tabpanel" tabindex="0"></div>
+  </main>
+  <footer class="sn-footer"><div class="sn-container sn-footer-bottom" style="margin-top:0;border-top:0;padding-top:0"><span>Saved work stays in this browser unless you export it.</span><a href="settings.html#privacy" style="display:inline">Manage storage</a></div></footer>
+
+  <script src="tools/shared/catalog.js"></script>
+  <script src="tools/shared/workspace.js"></script>
+  <script src="tools/shared/projects-store.js"></script>
+  <script src="tools/shared/resilience.js"></script>
+  <script src="tools/shared/access.js"></script>
+  <script src="tools/shared/access-ui.js"></script>
+  <script src="tools/shared/artifacts.js"></script>
+  <script src="tools/shared/project-service.js"></script>
+  <script src="tools/shared/operations.js"></script>
+  <script src="tools/shared/platform.js"></script>
+  <script src="site/site-ui.js"></script>
+  <script src="site/library.js"></script>
+</body>
+</html>

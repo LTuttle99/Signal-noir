@@ -1,0 +1,16 @@
+[data-theme="dark"] body{background:radial-gradient(circle at 82% 5%,rgba(255,43,214,.13),transparent 30rem),#09070e!important}
+[data-theme="dark"] body>header h1{font-family:Georgia,serif;color:#fff!important}
+[data-theme="dark"] body>header h1:after{content:"";display:inline-block;width:7px;height:7px;margin-left:9px;border-radius:50%;background:#37e8ff;box-shadow:0 0 12px #37e8ff;vertical-align:middle}
+[data-theme="dark"] main>p{font-size:14px;line-height:1.65;color:#b4a6bf!important}
+[data-theme="dark"] main>div[class*="bg-white"]{border-color:rgba(255,255,255,.09)!important;background:linear-gradient(145deg,#15101f,#0f0b16)!important;box-shadow:0 16px 46px rgba(0,0,0,.22)}
+[data-theme="dark"] #task-list button{border:1px solid transparent}
+[data-theme="dark"] #task-list button[class*="bg-\[\#0062F1\]"]{border-color:rgba(255,43,214,.35)!important;background:linear-gradient(120deg,#ff2bd6,#8d42ff)!important;box-shadow:0 8px 22px rgba(255,43,214,.2)}
+[data-theme="dark"] #task-list button:hover{background:rgba(255,43,214,.08)!important;color:#ff70e3!important}
+[data-theme="dark"] #language-tabs button[class*="bg-\[\#00133C\]"]{background:linear-gradient(120deg,#ff2bd6,#8d42ff)!important;box-shadow:0 7px 20px rgba(255,43,214,.16)}
+[data-theme="dark"] #language-tabs button:not([class*="bg-\[\#00133C\]"]){border:1px solid rgba(255,255,255,.08);background:#100c18!important}
+[data-theme="dark"] pre{position:relative;border:1px solid rgba(255,43,214,.14);background:#07050b!important;box-shadow:inset 0 0 32px rgba(255,43,214,.025);font-size:13px!important;line-height:1.65!important}
+[data-theme="dark"] pre:before{content:"";display:block;width:8px;height:8px;margin-bottom:15px;border-radius:50%;background:#ff5f57;box-shadow:15px 0 #febc2e,30px 0 #28c840}
+.code-actions{display:flex;align-items:center;gap:12px}.code-actions button{padding:7px 10px;border:1px solid rgba(255,255,255,.09);border-radius:8px;background:transparent}.code-actions button:hover{border-color:#ff2bd6!important;color:#ff67df!important}
+[data-theme="dark"] select,[data-theme="dark"] input{background:#100c18!important;color:#f4edf8!important;border-color:#392a43!important}
+[data-theme="dark"] select:focus,[data-theme="dark"] input:focus{border-color:#ff2bd6!important;box-shadow:0 0 0 3px rgba(255,43,214,.09)!important;outline:0}
+@media(max-width:760px){main{padding:16px!important}.code-actions{width:100%;justify-content:flex-end}pre{font-size:11px!important}}

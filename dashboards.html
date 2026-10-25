@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboards &mdash; Signal Noir</title>
+    <link rel="stylesheet" href="tailwind.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600&display=swap" rel="stylesheet">
+    <style>h1, h2, h3 { font-family: 'Lora', Georgia, serif; }</style>
+    <link rel="icon" href="signal-noir-icon.svg" type="image/svg+xml">
+    <script src="tools/shared/theme.js"></script>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="tools/shared/design-system.css">
+    <link rel="stylesheet" href="tools/shared/platform.css">
+    <link rel="stylesheet" href="signal-pages.css">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Signal Noir Dashboards</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Your workspace</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-6">
+        <div class="flex flex-wrap gap-4 items-start justify-between">
+            <p class="text-sm text-slate-600 max-w-2xl">
+                Every dashboard you have saved from Dashboard Builder, in one place. Open one to view it,
+                edit it to change it, or delete it when it has served its purpose.
+            </p>
+            <a href="tools/dashboard-builder/index.html" class="bg-[#0062F1] hover:bg-[#00133C] text-white text-sm font-semibold px-4 py-2 rounded-lg whitespace-nowrap">Build a new one</a>
+        </div>
+
+        <div id="workspace-card" class="bg-white border border-slate-200 rounded-xl p-5">
+            <div class="flex flex-wrap gap-3 items-center justify-between mb-4">
+                <h2 class="text-sm font-medium text-slate-700">Saved in this browser</h2>
+                <div class="flex items-center gap-3">
+                    <input id="search" type="text" aria-label="Search dashboards" placeholder="Search by name, owner or audience"
+                        class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-[#00133C] outline-none min-w-[16rem]">
+                    <span id="usage" class="text-xs text-slate-500"></span>
+                </div>
+            </div>
+
+            <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            <div id="empty" class="hidden text-center py-10"></div>
+        </div>
+
+        <div id="published-card" class="hidden bg-white border border-slate-200 rounded-xl p-5">
+            <h2 class="text-sm font-medium text-slate-700 mb-1">Published to the site</h2>
+            <p class="text-xs text-slate-500 mb-4">
+                Dashboards committed to the <code class="text-[#00133C]">dashboards/</code> folder in the repo. Everyone
+                who can open this site sees these. They are removed by deleting the file and pushing, not from here.
+            </p>
+            <div id="published-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <h2 class="text-sm font-medium text-slate-700 mb-2">How saving works</h2>
+            <p class="text-xs text-slate-500 leading-relaxed max-w-3xl">
+                Saving keeps the dashboard's design and, where the numbers are small enough, the computed figures with
+                it. It is stored in this browser only, so it is yours rather than the team's, and clearing site data
+                removes it. A dashboard connected to a Google Sheet reloads live from that sheet every time you open it.
+                One built from a file you picked will show its saved figures, and needs the file attaching again if you
+                want to change what it measures.
+            </p>
+        </div>
+    </main>
+
+    <script src="tools/shared/dashboard-spec.js"></script>
+    <script src="tools/shared/workspace.js"></script>
+    <script>
+        let entries = [];
+        let published = [];
+
+        function showToast(message, kind) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ' + (kind === 'error'
+                ? 'bg-red-50 border border-red-300 text-red-600'
+                : 'bg-white border border-slate-200 text-slate-700');
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function escapeHtml(str) {
+            return String(str === null || str === undefined ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function whenText(iso) {
+            if (!iso) return '';
+            const then = new Date(iso);
+            if (Number.isNaN(then.getTime())) return '';
+
+            const days = Math.floor((Date.now() - then.getTime()) / 86400000);
+            if (days <= 0) return 'today';
+            if (days === 1) return 'yesterday';
+            if (days < 30) return days + ' days ago';
+            return then.toISOString().slice(0, 10);
+        }
+
+        function metaLine(entry) {
+            const bits = [];
+            if (entry.owner) bits.push('Owner: ' + entry.owner);
+            if (entry.audience) bits.push('For: ' + entry.audience);
+            if (entry.refresh) bits.push('Refresh: ' + entry.refresh);
+            return bits.join(' &middot; ');
+        }
+
+        function card(entry) {
+            const edit = 'tools/dashboard-builder/index.html#' + entry.spec;
+            const visuals = entry.visuals === 1 ? '1 visual' : entry.visuals + ' visuals';
+            const live = entry.source === 'googleSheet';
+
+            return `
+                <div class="border border-slate-200 rounded-xl p-4 flex flex-col bg-white" data-entry="${escapeHtml(entry.id)}">
+                    <div class="flex items-start justify-between gap-2">
+                        <h3 class="text-base font-semibold text-[#00133C] leading-snug">${escapeHtml(entry.title)}</h3>
+                        ${live ? '<span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">Live sheet</span>' : ''}
+                    </div>
+                    ${entry.subtitle ? `<p class="text-xs text-slate-600 mt-1 leading-relaxed">${escapeHtml(entry.subtitle)}</p>` : ''}
+                    <p class="text-[11px] text-slate-500 mt-2">${metaLine(entry)}</p>
+                    <p class="text-[11px] text-slate-400 mt-1">${visuals} &middot; saved ${whenText(entry.updated)}</p>
+                    <div class="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100">
+                        <button onclick="openEntry('${escapeHtml(entry.id)}')" class="text-xs font-semibold text-[#0062F1] hover:text-[#00133C]">Open</button>
+                        <a href="${edit}" class="text-xs font-semibold text-slate-600 hover:text-[#0062F1]">Edit</a>
+                        <button onclick="renameEntry('${escapeHtml(entry.id)}')" class="text-xs font-semibold text-slate-600 hover:text-[#0062F1]">Rename</button>
+                        <button onclick="deleteEntry('${escapeHtml(entry.id)}')" class="text-xs font-semibold text-red-600 hover:text-red-700 ml-auto">Delete</button>
+                    </div>
+                </div>`;
+        }
+
+        function publishedCard(item) {
+            return `
+                <div class="border border-slate-200 rounded-xl p-4 flex flex-col bg-white">
+                    <h3 class="text-base font-semibold text-[#00133C] leading-snug">${escapeHtml(item.title || item.file)}</h3>
+                    ${item.subtitle ? `<p class="text-xs text-slate-600 mt-1 leading-relaxed">${escapeHtml(item.subtitle)}</p>` : ''}
+                    <p class="text-[11px] text-slate-500 mt-2">${metaLine({ owner: item.owner, audience: item.audience, refresh: item.refresh })}</p>
+                    ${item.built ? `<p class="text-[11px] text-slate-400 mt-1">built ${escapeHtml(item.built)}</p>` : ''}
+                    <div class="mt-4 pt-3 border-t border-slate-100">
+                        <a href="dashboards/${encodeURIComponent(item.file)}" class="text-xs font-semibold text-[#0062F1] hover:text-[#00133C]">Open</a>
+                    </div>
+                </div>`;
+        }
+
+        function matches(entry, term) {
+            if (term === '') return true;
+            return [entry.title, entry.subtitle, entry.owner, entry.audience]
+                .join(' ').toLowerCase().includes(term);
+        }
+
+        function render() {
+            const term = document.getElementById('search').value.trim().toLowerCase();
+            const visible = entries.filter((e) => matches(e, term));
+
+            document.getElementById('grid').innerHTML = visible.map(card).join('');
+
+            const empty = document.getElementById('empty');
+            if (visible.length === 0) {
+                empty.className = 'text-center py-10';
+                empty.innerHTML = entries.length === 0
+                    ? `<p class="text-sm text-slate-600">No dashboards saved yet.</p>
+                       <p class="text-xs text-slate-500 mt-2">Build one, then press <strong>Save to Dashboards</strong> in the builder and it will appear here.</p>`
+                    : `<p class="text-sm text-slate-600">Nothing matches "${escapeHtml(term)}".</p>`;
+            } else {
+                empty.className = 'hidden';
+            }
+
+            const usage = workspaceUsage();
+            document.getElementById('usage').innerText = usage.count === 0
+                ? ''
+                : `${usage.count} saved, ${Math.max(1, Math.round(usage.bytes / 1024))} KB`;
+        }
+
+        function reload() {
+            entries = workspaceList();
+            render();
+        }
+
+        function openEntry(id) {
+            const entry = workspaceGet(id);
+            if (!entry) return;
+
+            try {
+                if (entry.baked) sessionStorage.setItem('hub_dashboard_figures', entry.baked);
+                else sessionStorage.removeItem('hub_dashboard_figures');
+            } catch (e) {
+                showToast('Could not hand the saved figures across, so this will show placeholders.', 'error');
+            }
+
+            window.location.href = 'tools/dashboard-builder/view.html#' + entry.spec;
+        }
+
+        function deleteEntry(id) {
+            const entry = workspaceGet(id);
+            if (!entry) return;
+            if (!window.confirm(`Delete "${entry.title}"? This removes it from this browser and cannot be undone.`)) return;
+
+            const result = workspaceDelete(id);
+            if (!result.ok) return showToast(result.reason, 'error');
+
+            showToast('Deleted.');
+            reload();
+        }
+
+        function renameEntry(id) {
+            const entry = workspaceGet(id);
+            if (!entry) return;
+
+            const next = window.prompt('Name this dashboard', entry.title);
+            if (next === null) return;
+
+            const result = workspaceRename(id, next);
+            if (!result.ok) return showToast(result.reason, 'error');
+
+            reload();
+        }
+
+        async function loadPublished() {
+            try {
+                const response = await fetch('dashboards/index.json', { cache: 'no-store' });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (!Array.isArray(data) || data.length === 0) return;
+
+                published = data.filter((item) => item && typeof item.file === 'string');
+                if (published.length === 0) return;
+
+                document.getElementById('published-card').className = 'bg-white border border-slate-200 rounded-xl p-5';
+                document.getElementById('published-grid').innerHTML = published.map(publishedCard).join('');
+            } catch (e) {
+                return;
+            }
+        }
+
+        document.getElementById('search').addEventListener('input', render);
+
+        reload();
+        loadPublished();
+
+        function dashboardsDataset() {
+            return null;
+        }
+</script>
+
+    <script src="tools/shared/definitions-data.js"></script>
+    <script src="tools/shared/definitions.js"></script>
+    <script src="tools/shared/vanessa-knowledge.js"></script>
+    <script src="tools/shared/vanessa.js"></script>
+    <script>
+        vanessaInit({ tool: 'dashboards' });
+        definitionsInit({ tool: 'dashboards' });
+</script>
+    <script src="tools/shared/catalog.js"></script>
+    <script src="tools/shared/resilience.js"></script>
+    <script src="tools/shared/access.js"></script>
+    <script src="tools/shared/access-ui.js"></script>
+    <script src="tools/shared/artifacts.js"></script>
+    <script src="tools/shared/project-service.js"></script>
+    <script src="tools/shared/operations.js"></script>
+    <script src="tools/shared/platform.js"></script>
+</body>
+</html>

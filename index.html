@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <meta name="description" content="26 free, private data and developer utilities that run entirely in your browser.">
+  <title>Tools · Signal Noir</title>
+  <link rel="icon" href="../signal-noir-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <script src="shared/theme.js"></script>
+  <link rel="stylesheet" href="shared/design-system.css">
+  <link rel="stylesheet" href="../site/site.css">
+</head>
+<body class="sn-app">
+  <main id="main" class="sn-container">
+    <header class="sn-page-head">
+      <span class="sn-eyebrow"><i></i>Free · no account · runs in your browser</span>
+      <h1 class="sn-h1">The toolkit</h1>
+      <p class="sn-lead">Focused utilities for data, SQL, statistics, visualization and everyday developer work. Every tool runs in your browser, and any data tool can hand its file to Studio when you want Vanessa to keep going.</p>
+    </header>
+
+    <section id="recent" class="sn-panel sn-panel-pad" style="margin-bottom:8px" hidden aria-labelledby="recent-title">
+      <div class="sn-split" style="margin-bottom:12px"><h2 id="recent-title" class="sn-eyebrow" style="margin:0">Recently used</h2><button type="button" class="sn-link sn-small" id="clear-recent">Clear</button></div>
+      <div class="recent-strip" id="recent-list"></div>
+    </section>
+
+    <div class="lib-layout">
+      <nav class="lib-side" aria-label="Tool categories" id="category-nav"></nav>
+      <div>
+        <div class="lib-toolbar">
+          <label class="sn-search" style="flex:1">
+            <span class="sn-sr-only">Search tools</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+            <input id="tool-search" class="sn-input" type="search" placeholder="Search by name or task, e.g. “merge two files”" autocomplete="off">
+          </label>
+        </div>
+        <div class="lib-mobile-cats" id="category-chips" aria-label="Tool categories"></div>
+        <div id="tool-groups" aria-live="polite"></div>
+        <div id="no-results" class="sn-empty" style="margin-top:28px" hidden>
+          <div class="sn-empty-icon">?</div>
+          <div class="sn-empty-title">No tool matches that</div>
+          <div class="sn-empty-text">Try a broader word, or describe the outcome to Vanessa. She can combine several tools into one plan.</div>
+          <div class="sn-empty-actions"><a class="sn-btn sn-btn-sm sn-btn-primary" id="ask-instead" href="../index.html#ask">Ask Vanessa instead</a></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="sn-footer"><div class="sn-container sn-footer-bottom" style="margin-top:0;border-top:0;padding-top:0"><span>All tools run locally in your browser. Files are never uploaded.</span><a href="../settings.html#privacy" style="display:inline">Privacy &amp; storage</a></div></footer>
+
+  <script src="shared/catalog.js"></script>
+  <script src="shared/resilience.js"></script>
+  <script src="shared/access.js"></script>
+  <script src="shared/access-ui.js"></script>
+  <script src="shared/artifacts.js"></script>
+  <script src="shared/project-service.js"></script>
+  <script src="shared/operations.js"></script>
+  <script src="shared/platform.js"></script>
+  <script src="../site/site-ui.js"></script>
+  <script src="../site/tool-library.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#08070c">
+  <title>Getting started · Signal Noir</title>
+  <link rel="icon" href="signal-noir-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script src="tools/shared/theme.js"></script>
+  <link rel="stylesheet" href="tools/shared/design-system.css">
+  <link rel="stylesheet" href="site/site.css">
+  <style>
+    .guide { max-width: 760px; }
+    .guide section { padding: 32px 0; border-top: 1px solid var(--sn-line); }
+    .guide h2 { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; font-size: 22px; }
+    .guide h2 b { color: var(--sn-text-4); font: 500 13px/1 var(--sn-font-mono); }
+    .guide p, .guide li { color: var(--sn-text-2); font-size: 15px; line-height: 1.7; }
+    .guide ul { margin: 12px 0 0; padding-left: 20px; }
+    .guide p + p { margin-top: 12px; }
+    .guide strong { color: var(--sn-text); }
+  </style>
+</head>
+<body class="sn-app">
+  <main id="main" class="sn-container">
+    <header class="sn-page-head">
+      <span class="sn-eyebrow"><i></i>Getting started</span>
+      <h1 class="sn-h1">Signal Noir in two minutes</h1>
+      <p class="sn-lead">Give Signal Noir your data and tell it what you need. It plans the analysis, runs it on your device, and shows the evidence for every number.</p>
+    </header>
+
+    <article class="guide">
+      <section>
+        <h2><b>01</b>Add data</h2>
+        <p>Drop CSV, Excel, JSON or a ZIP of files onto the box on the home page or into Studio. Files are read inside your browser; nothing is uploaded. Excel workbooks with several sheets ask which one to use, and messy exports with title rows are handled automatically.</p>
+      </section>
+      <section>
+        <h2><b>02</b>Ask Vanessa</h2>
+        <p>Describe the outcome, not the tool: <em>“why did sales drop last month?”</em>, <em>“compare these two files”</em>, <em>“clean this dataset”</em>, <em>“forecast next quarter”</em>. Vanessa shows an execution plan: import, validate, clean, join, analyze, visualize, report, act. Each step lights up as it actually runs.</p>
+        <p>Vanessa never changes your data without asking. Cleaning fixes and joins are offered for review and always create a new copy.</p>
+      </section>
+      <section>
+        <h2><b>03</b>Inspect the evidence</h2>
+        <p>Every finding has an <strong>Evidence</strong> button showing the source dataset, rows used, filters, the exact calculation, the method, when it was generated and whether it’s a computed value or a statistical estimate. If something wasn’t calculated, Signal Noir says so.</p>
+      </section>
+      <section>
+        <h2><b>04</b>Keep what’s useful</h2>
+        <p>Save findings, create reports and dashboards, and turn suggestions into tasks and decisions. They collect under <strong>Outputs</strong> in each project and in the <a class="sn-link" href="library.html">Library</a> across projects. Reports and dashboards download as single HTML files you can share.</p>
+      </section>
+      <section>
+        <h2><b>05</b>Use the tools directly</h2>
+        <p>Prefer to drive? The <a class="sn-link" href="tools/index.html">tool library</a> has 26 focused utilities: SQL Workbench, Statistical Tests, Fuzzy Duplicate Finder, Dashboard Builder, JSON and regex tools and more. Any data tool can hand its file to Studio with <strong>Continue in Studio</strong>. Press <span class="sn-kbd">⌘</span> <span class="sn-kbd">K</span> (Ctrl K on Windows) anywhere to jump to a tool or action.</p>
+      </section>
+      <section>
+        <h2><b>06</b>Where your data lives</h2>
+        <p>Every project is in <strong>Local</strong> mode: stored in this browser’s IndexedDB and never sent to a server. Export a project bundle from Studio or Settings to move it or back it up. Private Cloud sync and Team collaboration are planned and clearly marked as not available yet.</p>
+        <ul>
+          <li>Only CDN libraries (SheetJS, Chart.js and similar) and fonts are downloaded. They never carry your data.</li>
+          <li>A Google Sheets or web URL connection is fetched directly by your browser, only when you add one.</li>
+          <li>The optional live chat room uses a Supabase project you configure yourself.</li>
+        </ul>
+      </section>
+      <section>
+        <div class="sn-cluster"><a class="sn-btn sn-btn-accent" href="index.html#ask">Ask Vanessa</a><a class="sn-btn" href="tools/studio/index.html">Open Studio</a><button type="button" class="sn-btn sn-btn-ghost" id="open-demo">Try the demo project</button></div>
+      </section>
+    </article>
+  </main>
+  <footer class="sn-footer"><div class="sn-container sn-footer-bottom" style="margin-top:0;border-top:0;padding-top:0"><span>Signal Noir · local-first analytics</span><a href="settings.html#privacy" style="display:inline">Privacy &amp; storage</a></div></footer>
+  <script src="tools/shared/catalog.js"></script>
+  <script src="tools/shared/resilience.js"></script>
+  <script src="tools/shared/access.js"></script>
+  <script src="tools/shared/access-ui.js"></script>
+  <script src="tools/shared/artifacts.js"></script>
+  <script src="tools/shared/project-service.js"></script>
+  <script src="tools/shared/operations.js"></script>
+  <script src="tools/shared/platform.js"></script>
+  <script>
+    document.getElementById("open-demo").addEventListener("click", () => {
+      window.SignalNoir.platform.handoff.set({ openDemo: true });
+      window.SignalNoir.platform.navigate("tools/studio/index.html");
+    });
+</script>
+</body>
+</html>

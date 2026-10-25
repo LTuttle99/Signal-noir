@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue by Region 2025</title>
+<meta name="dashboard-title" content="Revenue by Region 2025">
+<meta name="dashboard-subtitle" content="Monthly revenue split by region and segment, published as a worked example of the publishing flow.">
+<meta name="dashboard-owner" content="Logann">
+<meta name="dashboard-audience" content="Leadership">
+<meta name="dashboard-refresh" content="monthly">
+<meta name="dashboard-built" content="2026-08-13">
+<link rel="stylesheet" href="../tailwind.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">
+<style>h1,h2{font-family:'Lora',Georgia,serif;}</style>
+    <link rel="manifest" href="../manifest.webmanifest">
+    <link rel="stylesheet" href="../tools/shared/platform.css">
+</head><body class="bg-slate-50 text-slate-900 font-sans">
+<main class="max-w-6xl mx-auto p-6"><div id="dashboard"></div></main>
+<script>const MEASURE_NAME_HINTS = [
+  "revenue", "sales", "amount", "total", "price", "cost", "spend", "expense",
+  "income", "profit", "margin", "quantity", "qty", "units", "volume", "count",
+  "balance", "payment", "fee", "score", "rate", "hours", "duration", "value", "premium"
+];
+
+const IDENTIFIER_NAME_HINTS = ["id", "code", "key", "uuid", "guid", "sku", "ref", "number", "no", "isbn"];
+const DATE_NAME_HINTS = ["date", "time", "created", "updated", "posted", "period", "timestamp", "day", "month", "year"];
+const BOOLEAN_VALUES = new Set(["yes", "no", "true", "false", "y", "n", "0", "1"]);
+
+function profileIsBlank(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "number" && Number.isNaN(value)) return true;
+  if (typeof value === "string" && value.trim() === "") return true;
+  return false;
+}
+
+const PROFILE_NUMBER_PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+const PROFILE_NUMBER_GROUPED = /^[+-]?\d{1,3}([,\u00a0\u202f' ]\d{3})+(\.\d+)?$/;
+const PROFILE_NUMBER_SEPARATORS = /[,\u00a0\u202f' ]/g;
+const PROFILE_NUMBER_CURRENCY = /[$\u00a3\u20ac\u00a5\u20b9]/g;
+
+function profileToNumber(value) {
+  if (profileIsBlank(value)) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return null;
+
+  let s = String(value).trim();
+  if (s === "") return null;
+
+  let sign = 1;
+  if (s.length > 2 && s.charAt(0) === "(" && s.charAt(s.length - 1) === ")") {
+    sign = -1;
+    s = s.slice(1, -1).trim();
+  }
+
+  if (s.indexOf("%") === s.length - 1 && s.length > 1) s = s.slice(0, -1).trim();
+
+  PROFILE_NUMBER_CURRENCY.lastIndex = 0;
+  s = s.replace(PROFILE_NUMBER_CURRENCY, "").trim();
+  if (s === "") return null;
+
+  if (PROFILE_NUMBER_GROUPED.test(s)) s = s.replace(PROFILE_NUMBER_SEPARATORS, "");
+  if (!PROFILE_NUMBER_PLAIN.test(s)) return null;
+
+  const n = Number(s);
+  return Number.isFinite(n) ? sign * n : null;
+}
+
+function profileToDate(value) {
+  if (profileIsBlank(value)) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string") return null;
+
+  const s = value.trim();
+  if (s === "") return null;
+
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]|$)/);
+  if (m) return safeDate(+m[1], +m[2], +m[3]);
+
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:[T ]|$)/);
+  if (m) return safeDate(+m[1], +m[2], +m[3]);
+
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return safeDate(+m[3], +m[1], +m[2]);
+
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+  if (m) return safeDate(twoDigitYear(+m[3]), +m[1], +m[2]);
+
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (m) return safeDate(+m[3], +m[1], +m[2]);
+
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  if (m) return safeDate(twoDigitYear(+m[3]), +m[1], +m[2]);
+
+  m = s.match(/^(\d{1,2})[ -]([A-Za-z]{3,9}\.?)[ -](\d{4})$/);
+  if (m) return safeDate(+m[3], monthFromName(m[2]), +m[1]);
+
+  m = s.match(/^([A-Za-z]{3,9}\.?)[ -](\d{1,2}),?[ -](\d{4})$/);
+  if (m) return safeDate(+m[3], monthFromName(m[1]), +m[2]);
+
+  return null;
+}
+
+const PROFILE_MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december"
+];
+
+function monthFromName(name) {
+  const lower = String(name).toLowerCase().replace(/\.$/, "");
+  const index = PROFILE_MONTH_NAMES.findIndex((m) => m === lower || (lower.length >= 3 && m.startsWith(lower)));
+  return index === -1 ? 0 : index + 1;
+}
+
+function twoDigitYear(year) {
+  return year + (year < 70 ? 2000 : 1900);
+}
+
+function safeDate(year, month, day) {
+  if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(d.getTime())) return null;
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+  return d;
+}
+
+function monthKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function nameMatches(column, hints) {
+  const tokens = String(column)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return hints.some((h) => tokens.includes(h));
+}
+
+function profileColumn(rows, column) {
+  const values = rows.map((r) => r[column]);
+  const present = values.filter((v) => !profileIsBlank(v));
+  const blankCount = values.length - present.length;
+  const blankRate = values.length === 0 ? 1 : blankCount / values.length;
+
+  const distinct = new Set(present.map((v) => (v instanceof Date ? v.getTime() : String(v))));
+  const distinctCount = distinct.size;
+  const uniqueRatio = present.length === 0 ? 0 : distinctCount / present.length;
+
+  const base = {
+    name: column,
+    total: values.length,
+    present: present.length,
+    blankCount,
+    blankRate,
+    distinctCount,
+    uniqueRatio,
+    type: "text",
+    score: 0
+  };
+
+  if (present.length === 0) return { ...base, type: "empty" };
+  if (distinctCount === 1) return { ...base, type: "constant", sample: String(present[0]) };
+
+  const looksIdName = nameMatches(column, IDENTIFIER_NAME_HINTS);
+
+  const dates = present.map(profileToDate);
+  const dateRatio = dates.filter((d) => d !== null).length / present.length;
+  if (dateRatio >= 0.9) {
+    const valid = dates.filter((d) => d !== null).sort((a, b) => a - b);
+    return {
+      ...base,
+      type: "date",
+      min: valid[0],
+      max: valid[valid.length - 1],
+      monthsSpanned: new Set(valid.map(monthKey)).size,
+      score: (nameMatches(column, DATE_NAME_HINTS) ? 2 : 0) + dateRatio
+    };
+  }
+
+  const numbers = present.map(profileToNumber);
+  const numericRatio = numbers.filter((n) => n !== null).length / present.length;
+  if (numericRatio >= 0.95) {
+    const nums = numbers.filter((n) => n !== null).sort((a, b) => a - b);
+    const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+    const variance = nums.reduce((s, v) => s + (v - mean) ** 2, 0) / nums.length;
+    const spread = mean === 0 ? 0 : Math.sqrt(variance) / Math.abs(mean);
+    const allIntegers = nums.every((n) => Number.isInteger(n));
+    const sequential = allIntegers && uniqueRatio > 0.99 && nums[nums.length - 1] - nums[0] === nums.length - 1;
+    const measureNamed = nameMatches(column, MEASURE_NAME_HINTS);
+
+    if (!measureNamed && (sequential || (looksIdName && uniqueRatio > 0.9))) {
+      return { ...base, type: "identifier", values: nums.length };
+    }
+
+    let score = 1;
+    if (measureNamed) score += 3;
+    if (looksIdName) score -= 2;
+    if (spread > 0.1) score += 1;
+    if (nums.some((n) => n < 0)) score -= 0.25;
+
+    return {
+      ...base,
+      type: "number",
+      min: nums[0],
+      max: nums[nums.length - 1],
+      mean,
+      sum: nums.reduce((a, b) => a + b, 0),
+      sorted: nums,
+      spread,
+      summable: nums.every((n) => n >= 0) || nameMatches(column, MEASURE_NAME_HINTS),
+      score
+    };
+  }
+
+  const lowered = Array.from(distinct).map((v) => String(v).toLowerCase());
+  if (distinctCount === 2 && lowered.every((v) => BOOLEAN_VALUES.has(v))) {
+    return { ...base, type: "boolean", score: 1 };
+  }
+
+  const avgLength = present.reduce((s, v) => s + String(v).length, 0) / present.length;
+  const avgWords = present.reduce((s, v) => s + String(v).trim().split(/\s+/).length, 0) / present.length;
+  const looksLikeProse = avgWords >= 3 && avgLength >= 20;
+
+  if (looksLikeProse && uniqueRatio > 0.5) return { ...base, type: "text" };
+  if (looksIdName && uniqueRatio > 0.8) return { ...base, type: "identifier" };
+  if (uniqueRatio > 0.85 && distinctCount > 40) return { ...base, type: "identifier" };
+
+  if (distinctCount <= Math.max(40, Math.floor(rows.length * 0.3))) {
+    let score = 2;
+    if (distinctCount <= 8) score += 2;
+    else if (distinctCount <= 20) score += 1;
+    if (blankRate > 0.2) score -= 1;
+    return { ...base, type: "category", score };
+  }
+
+  return { ...base, type: "text" };
+}
+
+function profileDataset(columns, rows) {
+  return columns
+    .filter((c) => String(c).trim() !== "")
+    .map((c) => profileColumn(rows, c));
+}
+
+function pickBest(profiles, type) {
+  const candidates = profiles.filter((p) => p.type === type);
+  if (candidates.length === 0) return null;
+  return candidates.slice().sort((a, b) => b.score - a.score)[0];
+}
+
+function planDashboard(profiles, rows) {
+  const dateCol = pickBest(profiles, "date");
+  const measures = profiles.filter((p) => p.type === "number").sort((a, b) => b.score - a.score);
+  const measure = measures[0] || null;
+  const dimensions = profiles
+    .filter((p) => p.type === "category" || p.type === "boolean")
+    .sort((a, b) => b.score - a.score);
+
+  const blocks = [];
+
+  if (dateCol && measure && dateCol.monthsSpanned >= 2) {
+    blocks.push({ kind: "trend", date: dateCol.name, measure: measure.name, hero: true });
+  } else if (dateCol && dateCol.monthsSpanned >= 2) {
+    blocks.push({ kind: "volume", date: dateCol.name, hero: true });
+  } else if (measure) {
+    blocks.push({ kind: "distribution", measure: measure.name, hero: true });
+  } else if (dimensions.length > 0) {
+    blocks.push({ kind: "breakdown", dimension: dimensions[0].name, measure: null, hero: true });
+  }
+
+  const used = new Set(blocks.map((b) => b.dimension).filter(Boolean));
+
+  for (const dim of dimensions) {
+    if (blocks.length >= 5) break;
+    if (used.has(dim.name)) continue;
+    used.add(dim.name);
+
+    if (dim.distinctCount <= 6) {
+      blocks.push({ kind: "composition", dimension: dim.name, measure: measure ? measure.name : null });
+    } else {
+      blocks.push({ kind: "breakdown", dimension: dim.name, measure: measure ? measure.name : null });
+    }
+  }
+
+  if (measure && !blocks.some((b) => b.kind === "distribution") && blocks.length < 6) {
+    blocks.push({ kind: "distribution", measure: measure.name });
+  }
+
+  if (measures.length >= 2 && blocks.length < 6) {
+    blocks.push({ kind: "compare", measures: measures.slice(0, 2).map((m) => m.name) });
+  }
+
+  const issues = [];
+  for (const p of profiles) {
+    if (p.type === "empty") issues.push(`"${p.name}" is completely empty.`);
+    else if (p.type === "constant") issues.push(`"${p.name}" is the same value in every row.`);
+    else if (p.blankRate >= 0.25) issues.push(`"${p.name}" is ${Math.round(p.blankRate * 100)}% blank.`);
+  }
+
+  return {
+    date: dateCol ? dateCol.name : null,
+    measure: measure ? measure.name : null,
+    dimensions: dimensions.map((d) => d.name),
+    blocks,
+    issues,
+    rowCount: rows.length
+  };
+}
+
+function buildKpis(profiles, plan, rows) {
+  const kpis = [{ label: "Rows", value: rows.length.toLocaleString(), tone: "navy" }];
+
+  const measure = profiles.find((p) => p.name === plan.measure);
+  if (measure) {
+    if (measure.summable) {
+      kpis.push({ label: `Total ${measure.name}`, value: formatCompact(measure.sum), tone: "blue" });
+    }
+    kpis.push({ label: `Average ${measure.name}`, value: formatCompact(measure.mean), tone: "slate" });
+  }
+
+  const firstDim = profiles.find((p) => p.name === plan.dimensions[0]);
+  if (firstDim) {
+    kpis.push({ label: `Distinct ${firstDim.name}`, value: firstDim.distinctCount.toLocaleString(), tone: "amber" });
+  }
+
+  const dateProfile = profiles.find((p) => p.name === plan.date);
+  if (dateProfile && dateProfile.monthsSpanned) {
+    kpis.push({ label: "Months covered", value: String(dateProfile.monthsSpanned), tone: "emerald" });
+  }
+
+  const worst = profiles.slice().sort((a, b) => b.blankRate - a.blankRate)[0];
+  if (worst && worst.blankRate > 0) {
+    kpis.push({ label: "Most blank column", value: `${Math.round(worst.blankRate * 100)}%`, tone: "red" });
+  }
+
+  return kpis.slice(0, 6);
+}
+
+function formatCompact(value) {
+  const n = Number(value) || 0;
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  if (abs >= 10) return n.toFixed(0);
+  return n.toFixed(2);
+}
+
+function aggregateBy(rows, dimension, measure, limit = 12) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const raw = row[dimension];
+    const key = profileIsBlank(raw) ? "(blank)" : String(raw);
+    const entry = groups.get(key) || { total: 0, count: 0 };
+    if (measure) {
+      const n = profileToNumber(row[measure]);
+      if (n !== null) entry.total += n;
+    }
+    entry.count += 1;
+    groups.set(key, entry);
+  }
+
+  const list = Array.from(groups.entries()).map(([label, v]) => ({
+    label,
+    value: measure ? v.total : v.count
+  }));
+
+  list.sort((a, b) => b.value - a.value);
+  if (list.length <= limit) return list;
+
+  const top = list.slice(0, limit - 1);
+  const rest = list.slice(limit - 1).reduce((s, r) => s + r.value, 0);
+  top.push({ label: `Other (${list.length - limit + 1})`, value: rest });
+  return top;
+}
+
+function aggregateByMonth(rows, dateColumn, measure) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const d = profileToDate(row[dateColumn]);
+    if (!d) continue;
+    const key = monthKey(d);
+    const entry = groups.get(key) || { total: 0, count: 0 };
+    if (measure) {
+      const n = profileToNumber(row[measure]);
+      if (n !== null) entry.total += n;
+    }
+    entry.count += 1;
+    groups.set(key, entry);
+  }
+
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([label, v]) => ({ label, value: measure ? v.total : v.count }));
+}
+</script>
+<script>const DASHBOARD_SPEC_VERSION = 1;
+
+const DASHBOARD_VISUAL_KINDS = {
+  kpi: { label: "KPI tile", needsDimension: false, needsGrain: false, needsSecondMeasure: false, defaultWidth: "quarter" },
+  trend: { label: "Trend line", needsDimension: false, needsGrain: true, needsSecondMeasure: false, defaultWidth: "full" },
+  column: { label: "Column chart", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
+  bar: { label: "Bar chart", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
+  donut: { label: "Donut chart", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
+  table: { label: "Table", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
+  details: { label: "Detail rows", needsDimension: false, needsGrain: false, needsSecondMeasure: false, needsColumns: true, defaultWidth: "full" },
+  scatter: { label: "Scatter plot", needsDimension: false, needsGrain: false, needsSecondMeasure: true, defaultWidth: "half" }
+};
+
+const DASHBOARD_AGGREGATIONS = ["sum", "average", "count", "min", "max", "distinct count"];
+
+const DASHBOARD_GRAINS = ["day", "week", "month", "quarter", "year"];
+
+const DASHBOARD_WIDTHS = ["quarter", "half", "full"];
+
+const DASHBOARD_FILTER_OPERATORS = ["equals", "not equals", "greater than", "less than", "contains", "in list"];
+
+const DASHBOARD_SLICER_TYPES = ["list", "dropdown", "range", "date range"];
+
+const DASHBOARD_FORMATS = ["auto", "percent", "number", "currency"];
+
+const DASHBOARD_MAX_RATIO_DEPTH = 4;
+
+const DASHBOARD_PALETTES = {
+  hub: ["#0062F1", "#00133C", "#DC6803", "#059669", "#7C3AED", "#DB2777", "#0891B2", "#CA8A04", "#65A30D", "#E11D48"],
+  ocean: ["#0E7490", "#0369A1", "#1E3A8A", "#0D9488", "#155E75", "#3B82F6", "#14B8A6", "#1D4ED8", "#22D3EE", "#312E81"],
+  forest: ["#15803D", "#166534", "#4D7C0F", "#065F46", "#84CC16", "#047857", "#3F6212", "#10B981", "#14532D", "#A3E635"],
+  sunset: ["#EA580C", "#DC2626", "#D97706", "#BE123C", "#F59E0B", "#9A3412", "#F43F5E", "#B45309", "#FB923C", "#7F1D1D"],
+  plum: ["#7C3AED", "#6D28D9", "#A21CAF", "#4C1D95", "#C026D3", "#8B5CF6", "#DB2777", "#581C87", "#E879F9", "#9D174D"],
+  slate: ["#334155", "#0F172A", "#64748B", "#1E293B", "#94A3B8", "#475569", "#CBD5E1", "#0B1220", "#7C8CA1", "#E2E8F0"]
+};
+
+const DASHBOARD_PALETTE_NAMES = Object.keys(DASHBOARD_PALETTES);
+
+function dashboardCleanColor(value) {
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : null;
+}
+
+function dashboardPaletteFor(spec) {
+  const base = DASHBOARD_PALETTES[spec && spec.palette] || DASHBOARD_PALETTES.hub;
+  const accent = spec ? dashboardCleanColor(spec.accent) : null;
+  if (!accent) return base;
+  return [accent].concat(base.filter((c) => c.toLowerCase() !== accent));
+}
+
+const DASHBOARD_TEXT_LIMIT = 160;
+
+function dashboardCleanText(value, limit = DASHBOARD_TEXT_LIMIT) {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function dashboardPickOption(value, allowed, fallback) {
+  const cleaned = dashboardCleanText(value, 40).toLowerCase();
+  return allowed.includes(cleaned) ? cleaned : fallback;
+}
+
+function dashboardCleanInteger(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function dashboardNormalizeFilter(raw) {
+  const field = dashboardCleanText(raw && raw.field, 60);
+  if (field === "") return null;
+  return {
+    field,
+    op: dashboardPickOption(raw && raw.op, DASHBOARD_FILTER_OPERATORS, "equals"),
+    value: dashboardCleanText(raw && raw.value, 80)
+  };
+}
+
+function dashboardNormalizeDivideBy(raw, depth = 0) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const measureRef = dashboardCleanText(raw.measureRef, 24) || null;
+  const measure = dashboardCleanText(raw.measure, 60);
+  if (measure === "" && !measureRef) return null;
+
+  return {
+    measureRef,
+    measure: measure || "Not specified",
+    aggregation: dashboardPickOption(raw.aggregation, DASHBOARD_AGGREGATIONS, "count"),
+    filters: Array.isArray(raw.filters)
+      ? raw.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
+      : [],
+    divideBy: depth < DASHBOARD_MAX_RATIO_DEPTH ? dashboardNormalizeDivideBy(raw.divideBy, depth + 1) : null
+  };
+}
+
+function dashboardNormalizeBinding(raw, kind) {
+  const shape = DASHBOARD_VISUAL_KINDS[kind];
+  const source = raw || {};
+
+  const binding = {
+    source: dashboardCleanText(source.source, 60) || "Not specified",
+    measure: dashboardCleanText(source.measure, 60) || "Not specified",
+    aggregation: dashboardPickOption(source.aggregation, DASHBOARD_AGGREGATIONS, "sum"),
+    dimension: shape.needsDimension ? dashboardCleanText(source.dimension, 60) || "Not specified" : null,
+    measure2: shape.needsSecondMeasure ? dashboardCleanText(source.measure2, 60) || "Not specified" : null,
+    grain: shape.needsGrain ? dashboardPickOption(source.grain, DASHBOARD_GRAINS, "month") : null,
+    limit: dashboardCleanInteger(source.limit, 3, 50, 10),
+    filters: Array.isArray(source.filters)
+      ? source.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
+      : [],
+    divideBy: dashboardNormalizeDivideBy(source.divideBy),
+    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto"),
+    measureRef: dashboardCleanText(source.measureRef, 24) || null,
+    columns: shape.needsColumns && Array.isArray(source.columns)
+      ? source.columns.map((c) => dashboardCleanText(c, 60)).filter(Boolean).slice(0, 12)
+      : null,
+    sort: shape.needsColumns ? dashboardPickOption(source.sort, ["none", "ascending", "descending"], "none") : null,
+    sortBy: shape.needsColumns ? dashboardCleanText(source.sortBy, 60) : null
+  };
+
+  return binding;
+}
+
+function dashboardNormalizeVisual(raw, index) {
+  const source = raw || {};
+  const kind = Object.prototype.hasOwnProperty.call(DASHBOARD_VISUAL_KINDS, source.kind) ? source.kind : "column";
+  const shape = DASHBOARD_VISUAL_KINDS[kind];
+
+  return {
+    id: dashboardCleanText(source.id, 24) || `v${index + 1}`,
+    kind,
+    title: dashboardCleanText(source.title, 80) || shape.label,
+    width: dashboardPickOption(source.width, DASHBOARD_WIDTHS, shape.defaultWidth),
+    notes: dashboardCleanText(source.notes, 240),
+    binding: dashboardNormalizeBinding(source.binding, kind)
+  };
+}
+
+function dashboardBoolean(value, fallback) {
+  if (value === true || value === false) return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function dashboardNormalizeMeasure(raw, index) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const name = dashboardCleanText(source.name, 60);
+  if (name === "") return null;
+
+  return {
+    id: dashboardCleanText(source.id, 24) || `m${index + 1}`,
+    name,
+    measure: dashboardCleanText(source.measure, 60) || "Not specified",
+    aggregation: dashboardPickOption(source.aggregation, DASHBOARD_AGGREGATIONS, "sum"),
+    filters: Array.isArray(source.filters)
+      ? source.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
+      : [],
+    divideBy: dashboardNormalizeDivideBy(source.divideBy),
+    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto")
+  };
+}
+
+function dashboardFindMeasure(spec, id) {
+  if (!spec || !Array.isArray(spec.measures) || !id) return null;
+  return spec.measures.find((m) => m.id === id) || null;
+}
+
+function dashboardResolveDivideBy(divideBy, spec, seen, depth) {
+  if (!divideBy || depth > DASHBOARD_MAX_RATIO_DEPTH) return null;
+
+  const named = dashboardFindMeasure(spec, divideBy.measureRef);
+  if (!named || seen.has(named.id)) {
+    return Object.assign({}, divideBy, {
+      divideBy: dashboardResolveDivideBy(divideBy.divideBy, spec, seen, depth + 1)
+    });
+  }
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(named.id);
+
+  return {
+    measureRef: divideBy.measureRef,
+    measureName: named.name,
+    measure: named.measure,
+    aggregation: named.aggregation,
+    filters: named.filters,
+    divideBy: dashboardResolveDivideBy(named.divideBy, spec, nextSeen, depth + 1)
+  };
+}
+
+function dashboardEffectiveBinding(visual, spec) {
+  const named = dashboardFindMeasure(spec, visual.binding.measureRef);
+  const seen = new Set(named ? [named.id] : []);
+
+  if (!named) {
+    return Object.assign({}, visual.binding, {
+      divideBy: dashboardResolveDivideBy(visual.binding.divideBy, spec, seen, 1)
+    });
+  }
+
+  return Object.assign({}, visual.binding, {
+    measure: named.measure,
+    aggregation: named.aggregation,
+    filters: named.filters,
+    divideBy: dashboardResolveDivideBy(named.divideBy, spec, seen, 1),
+    format: named.format,
+    measureName: named.name
+  });
+}
+
+function dashboardNormalizeSlicer(raw, index) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const field = dashboardCleanText(source.field, 60);
+  if (field === "") return null;
+
+  return {
+    id: dashboardCleanText(source.id, 24) || `s${index + 1}`,
+    field,
+    type: dashboardPickOption(source.type, DASHBOARD_SLICER_TYPES, "dropdown"),
+    label: dashboardCleanText(source.label, 60) || field,
+    width: dashboardPickOption(source.width, DASHBOARD_WIDTHS, "quarter")
+  };
+}
+
+function dashboardNormalizeSource(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.kind !== "googleSheet") return null;
+
+  const url = dashboardCleanText(raw.url, 400);
+  if (!/^https:\/\/docs\.google\.com\/spreadsheets\//.test(url)) return null;
+
+  return { kind: "googleSheet", url };
+}
+
+function dashboardNormalizeSpec(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const visuals = Array.isArray(source.visuals) ? source.visuals.slice(0, 24) : [];
+  const slicers = Array.isArray(source.slicers) ? source.slicers.slice(0, 8) : [];
+  const measures = Array.isArray(source.measures) ? source.measures.slice(0, 16) : [];
+
+  return {
+    v: DASHBOARD_SPEC_VERSION,
+    title: dashboardCleanText(source.title, 90) || "Untitled dashboard",
+    subtitle: dashboardCleanText(source.subtitle, 200),
+    requester: dashboardCleanText(source.requester, 80),
+    audience: dashboardCleanText(source.audience, 80),
+    refresh: dashboardPickOption(source.refresh, ["real time", "hourly", "daily", "weekly", "monthly"], "daily"),
+    created: /^\d{4}-\d{2}-\d{2}$/.test(source.created) ? source.created : new Date().toISOString().slice(0, 10),
+    source: dashboardNormalizeSource(source.source),
+    showCaptions: dashboardBoolean(source.showCaptions, true),
+    showDeltas: dashboardBoolean(source.showDeltas, true),
+    showEditLink: dashboardBoolean(source.showEditLink, true),
+    palette: dashboardPickOption(source.palette, DASHBOARD_PALETTE_NAMES, "hub"),
+    accent: dashboardCleanColor(source.accent),
+    measures: measures.map(dashboardNormalizeMeasure).filter(Boolean),
+    slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
+    visuals: visuals.map(dashboardNormalizeVisual)
+  };
+}
+
+function dashboardEncodeSpec(spec) {
+  const bytes = new TextEncoder().encode(JSON.stringify(spec));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function dashboardDecodeSpec(encoded) {
+  const cleaned = String(encoded || "").replace(/^#/, "").replace(/-/g, "+").replace(/_/g, "/");
+  if (cleaned === "") return null;
+
+  try {
+    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return dashboardNormalizeSpec(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (e) {
+    return null;
+  }
+}
+
+function dashboardSeedFrom(text) {
+  let h = 2166136261;
+  const s = String(text);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function dashboardRandom(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a += 0x6d2b79f5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function dashboardGrainLabels(grain, count) {
+  const labels = [];
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+
+  for (let i = count - 1; i >= 0; i--) {
+    if (grain === "year") {
+      labels.push(String(year - i));
+    } else if (grain === "quarter") {
+      const total = year * 4 + Math.floor(month / 3) - i;
+      labels.push(`${Math.floor(total / 4)} Q${(((total % 4) + 4) % 4) + 1}`);
+    } else if (grain === "month") {
+      const total = year * 12 + month - i;
+      labels.push(`${Math.floor(total / 12)}-${String((((total % 12) + 12) % 12) + 1).padStart(2, "0")}`);
+    } else {
+      const step = grain === "week" ? 7 : 1;
+      const d = new Date(Date.UTC(year, month, now.getUTCDate() - i * step));
+      labels.push(d.toISOString().slice(0, 10));
+    }
+  }
+
+  return labels;
+}
+
+function dashboardCategoryLabels(dimension, count, rand) {
+  const known = {
+    region: ["North", "South", "East", "West", "Central"],
+    territory: ["North", "South", "East", "West", "Central"],
+    segment: ["Enterprise", "Mid Market", "SMB", "Public Sector"],
+    channel: ["Direct", "Partner", "Online", "Retail"],
+    product: ["Standard", "Premium", "Enterprise", "Trial", "Legacy"],
+    status: ["Open", "In Progress", "Closed", "On Hold"],
+    department: ["Finance", "Operations", "IT", "HR", "Marketing", "Sales"],
+    category: ["Category A", "Category B", "Category C", "Category D"]
+  };
+
+  const key = String(dimension || "").toLowerCase();
+  const match = Object.keys(known).find((k) => key.includes(k));
+  const base = match ? known[match] : null;
+
+  const labels = [];
+  for (let i = 0; i < count; i++) {
+    if (base && i < base.length) labels.push(base[i]);
+    else labels.push(`${dashboardCleanText(dimension, 24) || "Value"} ${i + 1}`);
+  }
+
+  return labels;
+}
+
+function dashboardMeasureScale(measure, aggregation, binding) {
+  const name = String(measure || "").toLowerCase();
+  if (binding && dashboardBindingFormat(binding) === "percent") return 60;
+  if (aggregation === "count" || aggregation === "distinct count") return 400;
+  if (/rate|percent|margin|share|ratio/.test(name)) return 40;
+  if (/revenue|sales|amount|spend|cost|value|premium|gwp|balance/.test(name)) return 250000;
+  if (/quantity|qty|units|volume|orders|tickets/.test(name)) return 1800;
+  return 5000;
+}
+
+function dashboardResolveSample(visual) {
+  const binding = visual.binding;
+  const rand = dashboardRandom(dashboardSeedFrom(`${visual.id}|${visual.title}|${binding.measure}`));
+  const scale = dashboardMeasureScale(binding.measure, binding.aggregation, binding);
+  const jitter = () => 0.7 + rand() * 0.6;
+
+  if (visual.kind === "kpi") {
+    const value = scale * jitter() * (binding.aggregation === "average" ? 0.02 : 1);
+    return { kind: "kpi", value, delta: (rand() - 0.4) * 0.3 };
+  }
+
+  if (visual.kind === "trend") {
+    const counts = { day: 30, week: 26, month: 12, quarter: 8, year: 5 };
+    const count = counts[binding.grain] || 12;
+    const labels = dashboardGrainLabels(binding.grain, count);
+    const drift = 0.6 + rand() * 0.8;
+    const points = labels.map((label, i) => {
+      const trend = 1 + (i / Math.max(1, count - 1)) * drift;
+      const season = 1 + Math.sin((i / count) * Math.PI * 2) * 0.12;
+      return { label, value: (scale / count) * trend * season * jitter() };
+    });
+    return { kind: "series", points };
+  }
+
+  if (visual.kind === "scatter") {
+    const scale2 = dashboardMeasureScale(binding.measure2, binding.aggregation);
+    const points = [];
+    for (let i = 0; i < 80; i++) {
+      const x = scale * (0.1 + rand() * 0.9) * 0.02;
+      points.push({ x, y: (x / (scale * 0.02)) * scale2 * 0.02 * (0.6 + rand() * 0.8) });
+    }
+    return { kind: "points", points };
+  }
+
+  const count = Math.min(binding.limit, visual.kind === "donut" ? 6 : binding.limit);
+  const labels = dashboardCategoryLabels(binding.dimension, count, rand);
+  const points = labels
+    .map((label) => ({ label, value: scale * (0.15 + rand()) }))
+    .sort((a, b) => b.value - a.value);
+
+  return { kind: "series", points };
+}
+
+function dashboardFormatValue(value, measure, aggregation, format) {
+  const name = String(measure || "").toLowerCase();
+  const n = Number(value) || 0;
+  const abs = Math.abs(n);
+
+  if (format === "percent") return `${n.toFixed(1)}%`;
+
+  if (format !== "number" && format !== "currency") {
+    if (aggregation === "count" || aggregation === "distinct count") {
+      return Math.round(n).toLocaleString("en-US");
+    }
+    if (/rate|percent|margin|share|ratio/.test(name)) return `${n.toFixed(1)}%`;
+  }
+
+  const currency = format === "currency" || (format !== "number"
+    && /revenue|sales|amount|spend|cost|value|premium|gwp|balance|price|fee/.test(name)
+    && aggregation !== "count" && aggregation !== "distinct count");
+  const prefix = currency ? "$" : "";
+
+  if (abs >= 1e9) return `${prefix}${(n / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${prefix}${(n / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${prefix}${(n / 1e3).toFixed(1)}K`;
+  return `${prefix}${n.toFixed(abs < 10 ? 1 : 0)}`;
+}
+
+function dashboardBindingFormat(binding) {
+  if (binding.format && binding.format !== "auto") return binding.format;
+  return binding.divideBy ? "percent" : "auto";
+}
+
+function dashboardBindingSummary(visual) {
+  const b = visual.binding;
+
+  if (visual.kind === "details") {
+    const shown = b.columns && b.columns.length ? `${b.columns.length} columns` : "every column";
+    const bits = [`Rows of ${b.source || "the data"}, showing ${shown}`];
+    if (b.sort !== "none" && b.sortBy) bits.push(`sorted by ${b.sortBy} ${b.sort}`);
+    if (b.filters.length > 0) {
+      bits.push(`filtered on ${Array.from(new Set(b.filters.map((f) => f.field))).join(", ")}`);
+    }
+    return bits.join(", ");
+  }
+
+  if (b.measureName) {
+    const named = [b.measureName];
+    if (b.dimension) named.push(`by ${b.dimension}`);
+    if (b.grain) named.push(`per ${b.grain}`);
+    return named.join(" ");
+  }
+
+  const parts = [`${b.aggregation} of ${b.measure}`];
+
+  if (b.filters.length > 0 && b.divideBy) {
+    parts.push(`where ${b.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+  }
+
+  if (b.divideBy) {
+    if (b.divideBy.measureName) {
+      parts.push(`divided by ${b.divideBy.measureName}`);
+    } else {
+      parts.push(`divided by ${b.divideBy.aggregation} of ${b.divideBy.measure}`);
+      if (b.divideBy.filters.length > 0) {
+        parts.push(`where ${b.divideBy.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+      }
+    }
+    if (dashboardBindingFormat(b) === "percent") parts.push("as a percentage");
+  }
+
+  if (b.dimension) parts.push(`by ${b.dimension}`);
+  if (b.measure2) parts.push(`against ${b.measure2}`);
+  if (b.grain) parts.push(`per ${b.grain}`);
+  if (b.filters.length > 0 && !b.divideBy) {
+    parts.push(`filtered on ${Array.from(new Set(b.filters.map((f) => f.field))).join(", ")}`);
+  }
+
+  return parts.join(" ");
+}
+
+function dashboardStarterSpec() {
+  return dashboardNormalizeSpec({
+    title: "Sales Performance",
+    subtitle: "Monthly revenue trend and breakdown by region, for the leadership review.",
+    requester: "",
+    audience: "Leadership",
+    refresh: "daily",
+    visuals: [
+      { id: "v1", kind: "kpi", title: "Total Revenue", width: "quarter", binding: { source: "Sales", measure: "Revenue", aggregation: "sum" } },
+      { id: "v2", kind: "kpi", title: "Orders", width: "quarter", binding: { source: "Sales", measure: "Order ID", aggregation: "distinct count" } },
+      { id: "v3", kind: "trend", title: "Revenue over time", width: "full", binding: { source: "Sales", measure: "Revenue", aggregation: "sum", grain: "month" } },
+      { id: "v4", kind: "column", title: "Revenue by region", width: "half", binding: { source: "Sales", measure: "Revenue", aggregation: "sum", dimension: "Region", limit: 6 } },
+      { id: "v5", kind: "donut", title: "Share by segment", width: "half", binding: { source: "Sales", measure: "Revenue", aggregation: "sum", dimension: "Segment", limit: 4 } }
+    ]
+  });
+}
+</script>
+<script>function dashboardCellIsBlank(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "number") return Number.isNaN(value);
+  if (typeof value === "string") return value.trim() === "";
+  return false;
+}
+
+function dashboardCellNumber(value) {
+  if (dashboardCellIsBlank(value)) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return null;
+  const s = String(value).trim().replace(/,/g, "");
+  if (!/^[+-]?\$?(\d+\.?\d*|\.\d+)%?$/.test(s)) return null;
+  const n = Number(s.replace(/[$%]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function dashboardCellText(value) {
+  if (dashboardCellIsBlank(value)) return "(blank)";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).trim();
+}
+
+function dashboardCellDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof profileToDate === "function") return profileToDate(value);
+  return null;
+}
+
+function dashboardMatchesFilter(row, filter) {
+  const raw = row[filter.field];
+  const text = dashboardCellText(raw).toLowerCase();
+  const target = String(filter.value == null ? "" : filter.value).trim().toLowerCase();
+  const num = dashboardCellNumber(raw);
+  const targetNum = Number(String(filter.value).replace(/[$,%\s]/g, ""));
+
+  if (filter.op === "equals") return text === target;
+  if (filter.op === "not equals") return text !== target;
+  if (filter.op === "contains") return text.includes(target);
+  if (filter.op === "in list") {
+    return target.split(/[,;|]/).map((v) => v.trim()).filter(Boolean).includes(text);
+  }
+  if (filter.op === "greater than") return num !== null && Number.isFinite(targetNum) && num > targetNum;
+  if (filter.op === "less than") return num !== null && Number.isFinite(targetNum) && num < targetNum;
+  return true;
+}
+
+const DASHBOARD_INCLUSIVE_OPERATORS = new Set(["equals", "contains", "in list"]);
+
+function dashboardApplyFilters(rows, filters) {
+  if (!filters || filters.length === 0) return rows;
+  const usable = filters.filter((f) => f && f.field);
+  if (usable.length === 0) return rows;
+
+  const groups = new Map();
+  for (const filter of usable) {
+    const inclusive = DASHBOARD_INCLUSIVE_OPERATORS.has(filter.op);
+    const key = inclusive ? `any:${filter.field}` : `all:${filter.field}:${filter.op}`;
+    if (!groups.has(key)) groups.set(key, { inclusive, filters: [] });
+    groups.get(key).filters.push(filter);
+  }
+
+  const clauses = Array.from(groups.values());
+
+  return rows.filter((row) => clauses.every((clause) => (clause.inclusive
+    ? clause.filters.some((f) => dashboardMatchesFilter(row, f))
+    : clause.filters.every((f) => dashboardMatchesFilter(row, f)))));
+}
+
+function dashboardAggregate(rows, measure, aggregation) {
+  if (aggregation === "count") {
+    let present = 0;
+    for (const row of rows) {
+      if (!dashboardCellIsBlank(row[measure])) present++;
+    }
+    return present;
+  }
+
+  if (aggregation === "distinct count") {
+    const seen = new Set();
+    for (const row of rows) {
+      if (!dashboardCellIsBlank(row[measure])) seen.add(dashboardCellText(row[measure]));
+    }
+    return seen.size;
+  }
+
+  const numbers = [];
+  for (const row of rows) {
+    const n = dashboardCellNumber(row[measure]);
+    if (n !== null) numbers.push(n);
+  }
+
+  if (numbers.length === 0) return 0;
+  if (aggregation === "average") return numbers.reduce((a, b) => a + b, 0) / numbers.length;
+  if (aggregation === "min") return Math.min(...numbers);
+  if (aggregation === "max") return Math.max(...numbers);
+  return numbers.reduce((a, b) => a + b, 0);
+}
+
+function dashboardRawValue(scopedRows, definition, depth) {
+  const numerator = dashboardAggregate(
+    dashboardApplyFilters(scopedRows, definition.filters),
+    definition.measure,
+    definition.aggregation
+  );
+
+  if (!definition.divideBy || depth >= 4) return numerator;
+
+  const denominator = dashboardRawValue(scopedRows, definition.divideBy, depth + 1);
+  if (!denominator) return 0;
+
+  const ratio = numerator / denominator;
+  return Number.isFinite(ratio) ? ratio : 0;
+}
+
+function dashboardComputeValue(scopedRows, binding) {
+  const raw = dashboardRawValue(scopedRows, binding, 0);
+  if (!binding.divideBy) return raw;
+  return dashboardBindingFormat(binding) === "percent" ? raw * 100 : raw;
+}
+
+function dashboardPeriodKey(date, grain) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+
+  if (grain === "year") return String(y);
+  if (grain === "quarter") return `${y} Q${Math.floor(m / 3) + 1}`;
+  if (grain === "month") return `${y}-${String(m + 1).padStart(2, "0")}`;
+  if (grain === "week") {
+    const start = new Date(Date.UTC(y, m, date.getUTCDate() - date.getUTCDay()));
+    return start.toISOString().slice(0, 10);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function dashboardFindDateColumn(rows, columns) {
+  for (const column of columns) {
+    let parsed = 0;
+    let present = 0;
+    for (const row of rows.slice(0, 200)) {
+      if (dashboardCellIsBlank(row[column])) continue;
+      present++;
+      if (dashboardCellDate(row[column])) parsed++;
+    }
+    if (present > 0 && parsed / present >= 0.9) return column;
+  }
+  return null;
+}
+
+function dashboardGroupSeries(rows, dimension, binding, limit) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const key = dashboardCellText(row[dimension]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  const series = Array.from(groups.entries())
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }))
+    .sort((a, b) => b.value - a.value);
+
+  if (series.length <= limit) return series;
+  if (binding.divideBy) return series.slice(0, limit);
+
+  const top = series.slice(0, limit - 1);
+  const restRows = series.slice(limit - 1);
+  const rest = restRows.reduce((s, r) => s + r.value, 0);
+  top.push({ label: `Other (${restRows.length})`, value: rest });
+  return top;
+}
+
+function dashboardTimeSeries(rows, dateColumn, binding, grain) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const date = dashboardCellDate(row[dateColumn]);
+    if (!date) continue;
+    const key = dashboardPeriodKey(date, grain);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }));
+}
+
+function dashboardSlicerOptions(rows, slicer) {
+  if (slicer.type === "range" || slicer.type === "date range") {
+    const values = [];
+    for (const row of rows) {
+      const v = slicer.type === "range" ? dashboardCellNumber(row[slicer.field]) : dashboardCellDate(row[slicer.field]);
+      if (v !== null) values.push(slicer.type === "range" ? v : v.getTime());
+    }
+    if (values.length === 0) return { min: 0, max: 0, empty: true };
+    return { min: Math.min(...values), max: Math.max(...values), empty: false };
+  }
+
+  const seen = new Set();
+  for (const row of rows) {
+    if (!dashboardCellIsBlank(row[slicer.field])) seen.add(dashboardCellText(row[slicer.field]));
+    if (seen.size > 200) break;
+  }
+  return { values: Array.from(seen).sort(), empty: seen.size === 0 };
+}
+
+function dashboardApplySlicers(rows, slicers, selections) {
+  if (!slicers || slicers.length === 0 || !selections) return rows;
+
+  let out = rows;
+  for (const slicer of slicers) {
+    const chosen = selections[slicer.id];
+    if (chosen === undefined || chosen === null || chosen === "") continue;
+
+    if (slicer.type === "range") {
+      out = out.filter((row) => {
+        const n = dashboardCellNumber(row[slicer.field]);
+        return n !== null && n >= chosen.min && n <= chosen.max;
+      });
+    } else if (slicer.type === "date range") {
+      out = out.filter((row) => {
+        const d = dashboardCellDate(row[slicer.field]);
+        if (!d) return false;
+        const t = d.getTime();
+        return t >= chosen.min && t <= chosen.max;
+      });
+    } else if (Array.isArray(chosen)) {
+      if (chosen.length === 0) continue;
+      const wanted = new Set(chosen);
+      out = out.filter((row) => wanted.has(dashboardCellText(row[slicer.field])));
+    } else {
+      out = out.filter((row) => dashboardCellText(row[slicer.field]) === chosen);
+    }
+  }
+
+  return out;
+}
+
+function dashboardResolveFromRows(visual, dataset) {
+  const binding = visual.binding;
+  const columns = dataset.columns || [];
+  const scoped = dashboardApplySlicers(dataset.rows || [], dataset.slicers, dataset.selections);
+  const rows = dashboardApplyFilters(scoped, binding.filters);
+
+  if (visual.kind === "kpi") {
+    const value = dashboardComputeValue(scoped, binding);
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
+    let delta = 0;
+
+    if (dateColumn) {
+      const series = dashboardTimeSeries(scoped, dateColumn, binding, "month");
+      if (series.length >= 2) {
+        const last = series[series.length - 1].value;
+        const prior = series[series.length - 2].value;
+        if (prior !== 0) delta = (last - prior) / Math.abs(prior);
+      }
+    }
+
+    return { kind: "kpi", value, delta };
+  }
+
+  if (visual.kind === "trend") {
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
+    if (!dateColumn) return { kind: "series", points: [], empty: "No date column was found in this file." };
+    const points = dashboardTimeSeries(scoped, dateColumn, binding, binding.grain);
+    return { kind: "series", points, empty: points.length === 0 ? "No rows had a readable date." : null };
+  }
+
+  if (visual.kind === "details") {
+    const chosen = (binding.columns && binding.columns.length ? binding.columns : columns).filter((c) => columns.includes(c));
+    if (chosen.length === 0) {
+      return { kind: "rows", columns: [], rows: [], empty: "Pick at least one column to show." };
+    }
+
+    let listed = rows;
+    if (binding.sort !== "none" && binding.sortBy && columns.includes(binding.sortBy)) {
+      const direction = binding.sort === "ascending" ? 1 : -1;
+      listed = rows.slice().sort((a, b) => {
+        const x = dashboardCellNumber(a[binding.sortBy]);
+        const y = dashboardCellNumber(b[binding.sortBy]);
+        if (x !== null && y !== null) return (x - y) * direction;
+        return dashboardCellText(a[binding.sortBy]).localeCompare(dashboardCellText(b[binding.sortBy])) * direction;
+      });
+    }
+
+    return {
+      kind: "rows",
+      columns: chosen,
+      rows: listed.slice(0, binding.limit),
+      total: listed.length,
+      empty: listed.length === 0 ? "No rows matched the filters." : null
+    };
+  }
+
+  if (visual.kind === "scatter") {
+    const points = [];
+    for (const row of rows) {
+      const x = dashboardCellNumber(row[binding.measure]);
+      const y = dashboardCellNumber(row[binding.measure2]);
+      if (x !== null && y !== null) points.push({ x, y });
+      if (points.length >= 3000) break;
+    }
+    return { kind: "points", points, empty: points.length === 0 ? "No rows had numbers in both columns." : null };
+  }
+
+  if (!columns.includes(binding.dimension)) {
+    return { kind: "series", points: [], empty: `Column "${binding.dimension}" is not in this file.` };
+  }
+
+  const limit = visual.kind === "donut" ? Math.min(binding.limit, 6) : binding.limit;
+  const points = dashboardGroupSeries(binding.divideBy ? scoped : rows, binding.dimension, binding, limit);
+  return { kind: "series", points, empty: points.length === 0 ? "No rows matched the filters." : null };
+}
+
+function dashboardResolveVisual(visual, dataset) {
+  if (!dataset) return dashboardResolveSample(visual);
+  if (Array.isArray(dataset.rows) && dataset.rows.length > 0) return dashboardResolveFromRows(visual, dataset);
+  if (dataset.baked && dataset.baked[visual.id]) return dataset.baked[visual.id];
+  return dashboardResolveSample(visual);
+}
+
+function dashboardSpecVisuals(spec) {
+  if (typeof dashboardEffectiveBinding !== "function") return spec.visuals;
+  return spec.visuals.map((v) => Object.assign({}, v, { binding: dashboardEffectiveBinding(v, spec) }));
+}
+
+function dashboardSpecColumns(spec, dataset) {
+  const wanted = new Set();
+
+  for (const slicer of spec.slicers) wanted.add(slicer.field);
+  for (const visual of dashboardSpecVisuals(spec)) {
+    wanted.add(visual.binding.measure);
+    if (visual.binding.dimension) wanted.add(visual.binding.dimension);
+    if (visual.binding.measure2) wanted.add(visual.binding.measure2);
+    if (visual.binding.columns) for (const c of visual.binding.columns) wanted.add(c);
+    if (visual.binding.sortBy) wanted.add(visual.binding.sortBy);
+    for (const filter of visual.binding.filters) wanted.add(filter.field);
+    let divisor = visual.binding.divideBy;
+    let guard = 0;
+    while (divisor && guard < 5) {
+      wanted.add(divisor.measure);
+      for (const filter of divisor.filters) wanted.add(filter.field);
+      divisor = divisor.divideBy;
+      guard++;
+    }
+  }
+  if (dataset && dataset.dateColumn) wanted.add(dataset.dateColumn);
+
+  const columns = (dataset && dataset.columns) || [];
+  return columns.filter((c) => wanted.has(c));
+}
+
+function dashboardBakeDataset(spec, dataset, maxRows = 50000) {
+  const base = {
+    source: dataset.source || "",
+    rowCount: (dataset.rows || []).length,
+    bakedAt: new Date().toISOString().slice(0, 10)
+  };
+
+  if (spec.slicers.length === 0) {
+    const baked = {};
+    for (const visual of dashboardSpecVisuals(spec)) baked[visual.id] = dashboardResolveFromRows(visual, dataset);
+    return Object.assign(base, { baked, interactive: false });
+  }
+
+  const columns = spec.showEditLink === false
+    ? dashboardSpecColumns(spec, dataset)
+    : (dataset.columns || []).slice();
+  const rows = (dataset.rows || []).slice(0, maxRows).map((row) => {
+    const out = {};
+    for (const column of columns) out[column] = row[column] === undefined ? null : row[column];
+    return out;
+  });
+
+  return Object.assign(base, {
+    interactive: true,
+    columns,
+    rows,
+    dateColumn: dataset.dateColumn,
+    truncated: (dataset.rows || []).length > maxRows
+  });
+}
+</script>
+<script>const DASHBOARD_WIDTH_CLASSES = {
+  quarter: "md:col-span-3",
+  half: "md:col-span-6",
+  full: "md:col-span-12"
+};
+
+function dashboardElement(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined && text !== null) el.textContent = text;
+  return el;
+}
+
+function dashboardChartOptions(extra) {
+  return Object.assign({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 400 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: "#475569", font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { color: "#475569", font: { size: 10 } }, grid: { color: "#e2e8f0" }, beginAtZero: true }
+    }
+  }, extra || {});
+}
+
+function dashboardFade(hex, alpha) {
+  const clean = /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? String(hex) : "#0062F1";
+  const r = parseInt(clean.slice(1, 3), 16);
+  const g = parseInt(clean.slice(3, 5), 16);
+  const b = parseInt(clean.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function dashboardDrawKpi(host, visual, data, showDelta, palette) {
+  const wrap = dashboardElement("div", "flex-1 flex flex-col justify-center min-h-[4rem]");
+
+  const text = dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding));
+  const size = text.length > 12 ? "text-xl" : text.length > 8 ? "text-2xl" : "text-3xl";
+
+  const big = dashboardElement("p", `${size} font-bold leading-tight break-words`, text);
+  big.style.color = palette[0];
+  wrap.appendChild(big);
+
+  if (showDelta) {
+    const delta = data.delta;
+    const tone = delta >= 0 ? "text-emerald-600" : "text-red-600";
+    const arrow = delta >= 0 ? "▲" : "▼";
+    wrap.appendChild(dashboardElement("p", `text-xs font-medium mt-1 ${tone}`,
+      `${arrow} ${Math.abs(delta * 100).toFixed(1)}% vs prior period`));
+  }
+
+  host.appendChild(wrap);
+}
+
+function dashboardDrawTable(host, visual, data) {
+  const scroller = dashboardElement("div", "overflow-x-auto");
+  const table = dashboardElement("table", "w-full text-left text-xs");
+
+  const thead = dashboardElement("thead");
+  const headRow = dashboardElement("tr", "border-b border-slate-200 text-slate-600 uppercase");
+  headRow.appendChild(dashboardElement("th", "py-2 pr-3 font-semibold", visual.binding.dimension));
+  headRow.appendChild(dashboardElement("th", "py-2 pl-3 font-semibold text-right", visual.binding.measure));
+  thead.appendChild(headRow);
+
+  const tbody = dashboardElement("tbody", "divide-y divide-slate-100");
+  for (const point of data.points) {
+    const row = dashboardElement("tr");
+    row.appendChild(dashboardElement("td", "py-2 pr-3 text-slate-700", point.label));
+    row.appendChild(dashboardElement("td", "py-2 pl-3 text-right text-slate-900 font-medium",
+      dashboardFormatValue(point.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding))));
+    tbody.appendChild(row);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  scroller.appendChild(table);
+  host.appendChild(scroller);
+}
+
+function dashboardDrawDetails(host, visual, data) {
+  const scroller = dashboardElement("div", "overflow-auto max-h-80 flex-1");
+  const table = dashboardElement("table", "w-full text-left text-xs");
+
+  const thead = dashboardElement("thead", "sticky top-0 bg-white");
+  const headRow = dashboardElement("tr", "border-b border-slate-200 text-slate-600 uppercase");
+  for (const column of data.columns) {
+    headRow.appendChild(dashboardElement("th", "py-2 pr-3 font-semibold whitespace-nowrap", column));
+  }
+  thead.appendChild(headRow);
+
+  const tbody = dashboardElement("tbody", "divide-y divide-slate-100");
+  for (const row of data.rows) {
+    const tr = dashboardElement("tr");
+    for (const column of data.columns) {
+      const raw = row[column];
+      const value = raw instanceof Date ? raw.toISOString().slice(0, 10) : raw;
+      tr.appendChild(dashboardElement("td", "py-1.5 pr-3 text-slate-700 whitespace-nowrap",
+        value === null || value === undefined || value === "" ? "" : String(value)));
+    }
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  scroller.appendChild(table);
+  host.appendChild(scroller);
+
+  if (data.total > data.rows.length) {
+    host.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-2 shrink-0",
+      `Showing ${data.rows.length.toLocaleString()} of ${data.total.toLocaleString()} rows.`));
+  }
+}
+
+function dashboardDrawChart(host, visual, data, charts, palette) {
+  const frame = dashboardElement("div", visual.width === "full" ? "h-72" : "h-56");
+  const canvas = document.createElement("canvas");
+  frame.appendChild(canvas);
+  host.appendChild(frame);
+
+  if (typeof Chart === "undefined") return;
+
+  const measure = visual.binding.measure;
+  const aggregation = visual.binding.aggregation;
+  const format = dashboardBindingFormat(visual.binding);
+  const tick = (value) => dashboardFormatValue(value, measure, aggregation, format);
+
+  if (visual.kind === "trend") {
+    charts.push(new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: data.points.map((p) => p.label),
+        datasets: [{
+          data: data.points.map((p) => p.value),
+          borderColor: palette[0],
+          backgroundColor: dashboardFade(palette[0], 0.12),
+          fill: true,
+          tension: 0.3,
+          pointRadius: data.points.length > 20 ? 0 : 3
+        }]
+      },
+      options: dashboardChartOptions({
+        scales: {
+          x: { ticks: { color: "#475569", font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+          y: { ticks: { color: "#475569", font: { size: 10 }, callback: tick }, grid: { color: "#e2e8f0" }, beginAtZero: true }
+        }
+      })
+    }));
+    return;
+  }
+
+  if (visual.kind === "donut") {
+    charts.push(new Chart(canvas, {
+      type: "doughnut",
+      data: {
+        labels: data.points.map((p) => p.label),
+        datasets: [{
+          data: data.points.map((p) => p.value),
+          backgroundColor: data.points.map((_, i) => palette[i % palette.length]),
+          borderColor: "#ffffff",
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        plugins: { legend: { display: true, position: "right", labels: { boxWidth: 12, font: { size: 10 } } } }
+      }
+    }));
+    return;
+  }
+
+  if (visual.kind === "scatter") {
+    charts.push(new Chart(canvas, {
+      type: "scatter",
+      data: { datasets: [{ data: data.points, backgroundColor: dashboardFade(palette[0], 0.45), pointRadius: 3 }] },
+      options: dashboardChartOptions({
+        scales: {
+          x: { title: { display: true, text: visual.binding.measure, font: { size: 10 } }, ticks: { color: "#475569", font: { size: 10 } }, grid: { color: "#f1f5f9" } },
+          y: { title: { display: true, text: visual.binding.measure2, font: { size: 10 } }, ticks: { color: "#475569", font: { size: 10 } }, grid: { color: "#e2e8f0" } }
+        }
+      })
+    }));
+    return;
+  }
+
+  const horizontal = visual.kind === "bar";
+  charts.push(new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: data.points.map((p) => p.label),
+      datasets: [{ data: data.points.map((p) => p.value), backgroundColor: palette[0], borderRadius: 4 }]
+    },
+    options: dashboardChartOptions({
+      indexAxis: horizontal ? "y" : "x",
+      scales: horizontal
+        ? {
+            x: { ticks: { color: "#475569", font: { size: 10 }, callback: tick }, grid: { color: "#e2e8f0" }, beginAtZero: true },
+            y: { ticks: { color: "#475569", font: { size: 10 } }, grid: { display: false } }
+          }
+        : {
+            x: { ticks: { color: "#475569", font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { color: "#475569", font: { size: 10 }, callback: tick }, grid: { color: "#e2e8f0" }, beginAtZero: true }
+          }
+    })
+  }));
+}
+
+function dashboardRenderVisual(visual, options, charts) {
+  const card = dashboardElement("div", `bg-white border border-slate-200 rounded-xl p-4 col-span-12 flex flex-col overflow-hidden ${DASHBOARD_WIDTH_CLASSES[visual.width] || DASHBOARD_WIDTH_CLASSES.half}`);
+
+  const head = dashboardElement("div", "mb-3 shrink-0");
+  const heading = dashboardElement("h3", "text-sm font-semibold text-[#00133C] leading-snug break-words", visual.title);
+  heading.title = visual.title;
+  head.appendChild(heading);
+  if (options.showCaptions) {
+    head.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-0.5", dashboardBindingSummary(visual)));
+  }
+  card.appendChild(head);
+
+  const data = typeof dashboardResolveVisual === "function"
+    ? dashboardResolveVisual(visual, options.dataset)
+    : dashboardResolveSample(visual);
+
+  if (data.empty) {
+    card.appendChild(dashboardElement("div", "text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-6 text-center", data.empty));
+  } else if (visual.kind === "kpi") {
+    dashboardDrawKpi(card, visual, data, options.showDeltas, options.palette);
+  } else if (visual.kind === "table") {
+    dashboardDrawTable(card, visual, data);
+  } else if (visual.kind === "details") {
+    dashboardDrawDetails(card, visual, data);
+  } else {
+    dashboardDrawChart(card, visual, data, charts, options.palette);
+  }
+
+  if (visual.notes && options.showNotes) {
+    card.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100", visual.notes));
+  }
+
+  return card;
+}
+
+function dashboardSlicerControl(slicer, dataset, onChange) {
+  const wrap = dashboardElement("div", `col-span-12 ${DASHBOARD_WIDTH_CLASSES[slicer.width] || DASHBOARD_WIDTH_CLASSES.quarter}`);
+  wrap.appendChild(dashboardElement("label", "block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1", slicer.label));
+
+  const rows = (dataset && dataset.rows) || [];
+  const options = typeof dashboardSlicerOptions === "function" && rows.length
+    ? dashboardSlicerOptions(rows, slicer)
+    : { values: [], empty: true };
+  const selections = dataset.selections || {};
+
+  if (options.empty) {
+    wrap.appendChild(dashboardElement("p", "text-[11px] text-slate-400 italic", "No values available"));
+    return wrap;
+  }
+
+  if (slicer.type === "range" || slicer.type === "date range") {
+    const isDate = slicer.type === "date range";
+    const current = selections[slicer.id] || { min: options.min, max: options.max };
+    const step = isDate ? 86400000 : Math.max(1, (options.max - options.min) / 100);
+
+    const describe = (v) => (isDate
+      ? new Date(v).toISOString().slice(0, 10)
+      : dashboardFormatValue(v, slicer.field, "sum"));
+
+    const readout = dashboardElement("p", "text-[11px] text-slate-600 mt-1", "");
+
+    const makeHandle = (value) => {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(options.min);
+      input.max = String(options.max);
+      input.step = String(step);
+      input.value = String(value);
+      input.className = "w-full accent-[#0062F1]";
+      return input;
+    };
+
+    const lower = makeHandle(Math.max(options.min, Math.min(current.min, options.max)));
+    const upper = makeHandle(Math.min(options.max, Math.max(current.max, options.min)));
+
+    const bounds = () => {
+      const a = Number(lower.value);
+      const b = Number(upper.value);
+      return { min: Math.min(a, b), max: Math.max(a, b) };
+    };
+
+    const paint = () => {
+      const { min, max } = bounds();
+      readout.textContent = `${describe(min)} to ${describe(max)}`;
+    };
+
+    const commit = () => {
+      const { min, max } = bounds();
+      const whole = min <= options.min && max >= options.max;
+      onChange(slicer.id, whole ? "" : { min, max });
+    };
+
+    for (const handle of [lower, upper]) {
+      handle.addEventListener("input", paint);
+      handle.addEventListener("change", commit);
+    }
+
+    paint();
+
+    const stack = dashboardElement("div", "flex flex-col gap-0.5");
+    const fromRow = dashboardElement("div", "flex items-center gap-2");
+    fromRow.appendChild(dashboardElement("span", "text-[10px] text-slate-400 w-8 shrink-0", "From"));
+    fromRow.appendChild(lower);
+    const toRow = dashboardElement("div", "flex items-center gap-2");
+    toRow.appendChild(dashboardElement("span", "text-[10px] text-slate-400 w-8 shrink-0", "To"));
+    toRow.appendChild(upper);
+
+    stack.appendChild(fromRow);
+    stack.appendChild(toRow);
+    wrap.appendChild(stack);
+    wrap.appendChild(readout);
+    return wrap;
+  }
+
+  if (slicer.type === "list") {
+    const list = dashboardElement("div", "flex flex-wrap gap-1.5 max-h-28 overflow-y-auto");
+    const chosen = new Set(Array.isArray(selections[slicer.id]) ? selections[slicer.id] : []);
+
+    for (const value of options.values) {
+      const active = chosen.has(value);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.textContent = value;
+      chip.className = `text-[11px] rounded-full px-2.5 py-1 border transition-colors ${active
+        ? "bg-[#0062F1] border-[#0062F1] text-white"
+        : "bg-white border-slate-300 text-slate-600 hover:border-[#0062F1]"}`;
+      chip.addEventListener("click", () => {
+        if (active) chosen.delete(value);
+        else chosen.add(value);
+        onChange(slicer.id, Array.from(chosen));
+      });
+      list.appendChild(chip);
+    }
+
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  const select = document.createElement("select");
+  select.className = "w-full bg-white border border-slate-300 rounded-lg text-xs p-2 text-slate-900";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All";
+  select.appendChild(all);
+
+  for (const value of options.values) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = value;
+    if (selections[slicer.id] === value) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  select.addEventListener("change", () => onChange(slicer.id, select.value));
+  wrap.appendChild(select);
+  return wrap;
+}
+
+function dashboardRenderSlicers(spec, container, dataset, rerender) {
+  if (spec.slicers.length === 0) return;
+
+  const bar = dashboardElement("div", "bg-white border border-slate-200 rounded-xl p-4 mb-4");
+  const grid = dashboardElement("div", "grid grid-cols-12 gap-4");
+
+  const onChange = (id, value) => {
+    dataset.selections = Object.assign({}, dataset.selections, { [id]: value });
+    rerender();
+  };
+
+  for (const slicer of spec.slicers) grid.appendChild(dashboardSlicerControl(slicer, dataset, onChange));
+
+  bar.appendChild(grid);
+
+  const hasSelection = Object.values(dataset.selections || {}).some((v) => v !== "" && v !== null && v !== undefined && (!Array.isArray(v) || v.length > 0));
+  if (hasSelection) {
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.textContent = "Clear all";
+    reset.className = "text-[11px] text-slate-500 hover:text-[#0062F1] font-medium mt-3";
+    reset.addEventListener("click", () => {
+      dataset.selections = {};
+      rerender();
+    });
+    bar.appendChild(reset);
+  }
+
+  container.appendChild(bar);
+}
+
+function dashboardRenderSpec(spec, container, options = {}) {
+  const settings = Object.assign(
+    { showNotes: true, showHeader: true, showFooter: true },
+    { showCaptions: spec.showCaptions !== false, showDeltas: spec.showDeltas !== false },
+    { palette: dashboardPaletteFor(spec) },
+    options
+  );
+  const charts = [];
+
+  if (settings.dataset) settings.dataset.slicers = spec.slicers;
+
+  const visuals = typeof dashboardEffectiveBinding === "function"
+    ? spec.visuals.map((v) => Object.assign({}, v, { binding: dashboardEffectiveBinding(v, spec) }))
+    : spec.visuals;
+
+  container.textContent = "";
+
+  if (settings.showHeader) {
+    const header = dashboardElement("div", "mb-5");
+    header.appendChild(dashboardElement("h1", "text-2xl font-semibold text-[#00133C]", spec.title));
+    if (spec.subtitle) header.appendChild(dashboardElement("p", "text-sm text-slate-600 mt-1 max-w-3xl", spec.subtitle));
+
+    const meta = dashboardElement("div", "flex flex-wrap gap-2 mt-3");
+    const chips = [];
+    if (spec.requester) chips.push(`Requested by ${spec.requester}`);
+    if (spec.audience) chips.push(`For ${spec.audience}`);
+    chips.push(`Refresh ${spec.refresh}`);
+    chips.push(`Drafted ${spec.created}`);
+    for (const chip of chips) {
+      meta.appendChild(dashboardElement("span", "text-[11px] text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2.5 py-1", chip));
+    }
+    header.appendChild(meta);
+    container.appendChild(header);
+  }
+
+  if (settings.dataset && spec.slicers.length > 0) {
+    dashboardRenderSlicers(spec, container, settings.dataset, () => {
+      for (const chart of charts) chart.destroy();
+      dashboardRenderSpec(spec, container, settings);
+    });
+  }
+
+  if (visuals.length === 0) {
+    container.appendChild(dashboardElement("div", "bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500",
+      "No visuals yet. Add one to see the dashboard take shape."));
+    return charts;
+  }
+
+  const grid = dashboardElement("div", "grid grid-cols-12 gap-4");
+  for (const visual of visuals) grid.appendChild(dashboardRenderVisual(visual, settings, charts));
+  container.appendChild(grid);
+
+  if (settings.showFooter) {
+    const dataset = settings.dataset;
+    const note = dataset && (dataset.baked || (dataset.rows && dataset.rows.length))
+      ? `Built from ${dataset.source || "an uploaded file"}${dataset.rowCount ? `, ${dataset.rowCount.toLocaleString()} rows` : ""}${dataset.bakedAt ? `, as at ${dataset.bakedAt}` : ""}.`
+      : "Figures shown are placeholder values generated from the requested shape, not real data. They are stable for a given link, so the layout can be reviewed before real data is attached.";
+    container.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-5 pt-4 border-t border-slate-200", note));
+  }
+
+  return charts;
+}
+</script>
+<script>var SPEC = dashboardNormalizeSpec({"v":1,"title":"Revenue by Region 2025","subtitle":"Monthly revenue split by region and segment, published as a worked example of the publishing flow.","requester":"Logann","audience":"Leadership","refresh":"monthly","created":"2026-08-13","source":null,"showCaptions":true,"showDeltas":true,"showEditLink":true,"palette":"hub","accent":null,"measures":[],"slicers":[],"visuals":[{"id":"v1","kind":"kpi","title":"Total revenue","width":"quarter","notes":"","binding":{"source":"quarterly-revenue.csv","measure":"revenue","aggregation":"sum","dimension":null,"measure2":null,"grain":null,"limit":8,"filters":[],"divideBy":null,"format":"auto","measureRef":null,"columns":null,"sort":null,"sortBy":null}},{"id":"v2","kind":"column","title":"revenue by region","width":"half","notes":"","binding":{"source":"quarterly-revenue.csv","measure":"revenue","aggregation":"sum","dimension":"region","measure2":null,"grain":null,"limit":8,"filters":[],"divideBy":null,"format":"auto","measureRef":null,"columns":null,"sort":null,"sortBy":null}},{"id":"v3","kind":"trend","title":"revenue over time","width":"full","notes":"","binding":{"source":"quarterly-revenue.csv","measure":"revenue","aggregation":"sum","dimension":null,"measure2":null,"grain":"month","limit":8,"filters":[],"divideBy":null,"format":"auto","measureRef":null,"columns":null,"sort":null,"sortBy":null}},{"id":"v4","kind":"column","title":"revenue by segment","width":"half","notes":"","binding":{"source":"quarterly-revenue.csv","measure":"revenue","aggregation":"sum","dimension":"segment","measure2":null,"grain":null,"limit":8,"filters":[],"divideBy":null,"format":"auto","measureRef":null,"columns":null,"sort":null,"sortBy":null}}]});
+var SNAPSHOT = {"source":"quarterly-revenue.csv","rowCount":144,"bakedAt":"2026-08-13","baked":{"v1":{"kind":"kpi","value":916740,"delta":0.04155276107162384},"v2":{"kind":"series","points":[{"label":"West","value":266985},{"label":"East","value":241785},{"label":"South","value":216585},{"label":"North","value":191385}],"empty":null},"v3":{"kind":"series","points":[{"label":"2025-01","value":76200},{"label":"2025-02","value":81372},{"label":"2025-03","value":85284},{"label":"2025-04","value":86976},{"label":"2025-05","value":86016},{"label":"2025-06","value":82668},{"label":"2025-07","value":77724},{"label":"2025-08","value":72408},{"label":"2025-09","value":68028},{"label":"2025-10","value":65640},{"label":"2025-11","value":65844},{"label":"2025-12","value":68580}],"empty":null},"v4":{"kind":"series","points":[{"label":"Enterprise","value":367980},{"label":"Mid Market","value":305580},{"label":"SMB","value":243180}],"empty":null}},"interactive":false};
+var BUILDER = "http://127.0.0.1:8021/tools/dashboard-builder/index.html";
+var HOST = document.getElementById("dashboard");
+var DATASET = SNAPSHOT;
+dashboardRenderSpec(SPEC, HOST, { dataset: DATASET });
+var bar = document.createElement("div");
+bar.className = "max-w-6xl mx-auto px-6 pb-8 text-right";
+var edit = document.createElement("a");
+edit.className = "text-[11px] text-slate-400 hover:text-[#0062F1] font-medium";
+edit.textContent = "Edit this dashboard";
+edit.href = BUILDER + "#" + dashboardEncodeSpec(SPEC);
+edit.addEventListener("click", function () {
+  try {
+    if (DATASET && DATASET.rows && DATASET.rows.length) {
+      sessionStorage.setItem("dashboardHandoff", JSON.stringify({
+        source: DATASET.source, columns: DATASET.columns, rows: DATASET.rows, dateColumn: DATASET.dateColumn
+      }));
+    }
+  } catch (e) {}
+});
+bar.appendChild(edit);
+document.body.appendChild(bar);</script>
+    <script src="../tools/shared/resilience.js"></script>
+    <script src="../tools/shared/access.js"></script>
+    <script src="../tools/shared/access-ui.js"></script>
+    <script src="../tools/shared/artifacts.js"></script>
+    <script src="../tools/shared/project-service.js"></script>
+    <script src="../tools/shared/operations.js"></script>
+    <script src="../tools/shared/platform.js"></script>
+</body></html>
